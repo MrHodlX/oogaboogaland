@@ -966,6 +966,154 @@
     }
     return { room, leds, bedrolls, equipment, hatch: { node: hatch, set: setHatch } };
   };
+  // MrHodl's den: a snug sleeping room whose bed, nightstand, mask peg, desk,
+  // shelves, crates and lanterns come back as interactive props for the scene
+  const denRoom = ({ half = 6.4, wallH = 3.4, bed = { x: 0.2, z: -4.2 } } = {}) => {
+    const room = createNode();
+    const lanterns = [];
+    const interactive = [];
+    const prop = (node, kind, radius = 0) => {
+      interactive.push({ node, kind, radius });
+      return node;
+    };
+    const floorGeo = panel({ w: half * 2, h: half * 2, tilesX: 8, tilesY: 8, color: "#2a231c", altColor: "#241e18" });
+    addChild(room, createNode({ rotation: { x: -Math.PI / 2, y: 0, z: 0 }, geometry: floorGeo, depthBias: 1.2 }));
+    const wallGeo = panel({ w: half * 2, h: wallH, tilesX: 8, tilesY: 3, color: "#2b241d", altColor: "#261f19" });
+    const skirtGeo = box({ w: half * 2, h: 0.16, d: 0.06, color: "#342b22", offset: { y: 0.08, z: 0.03 } });
+    const wallAt = (x, z, ry) => {
+      const wall = createNode({ position: { x, y: 0, z }, rotation: { x: 0, y: ry, z: 0 } });
+      addChild(wall, createNode({ position: { x: 0, y: wallH / 2, z: 0 }, geometry: wallGeo, depthBias: 1.1 }), createNode({ geometry: skirtGeo }));
+      return wall;
+    };
+    addChild(room, wallAt(0, -half, 0), wallAt(-half, 0, Math.PI / 2), wallAt(half, 0, -Math.PI / 2), wallAt(0, half, Math.PI));
+    const ceilingGeo = panel({ w: half * 2, h: half * 2, tilesX: 6, tilesY: 6, color: "#1b1611", altColor: "#18140f" });
+    ceilingGeo.castShadow = false;
+    addChild(room, createNode({ position: { x: 0, y: wallH, z: 0 }, rotation: { x: Math.PI / 2, y: 0, z: 0 }, geometry: ceilingGeo }));
+    // Low beams read the ceiling as a den rather than a hall
+    const beamGeo = box({ w: half * 2, h: 0.2, d: 0.22, color: "#3a2d20" });
+    addChild(room, createNode({ position: { x: 0, y: wallH - 0.11, z: -half + 2.6 }, geometry: beamGeo }), createNode({ position: { x: 0, y: wallH - 0.11, z: 1.4 }, geometry: beamGeo }));
+    // A rug, and the peels MrHodl never got round to sweeping
+    addChild(room, createNode({ position: { x: 0.2, y: 0.02, z: 0.5 }, rotation: { x: -Math.PI / 2, y: 0, z: 0 }, geometry: panel({ w: 4, h: 3.2, tilesX: 6, tilesY: 5, color: "#5a3a2a", altColor: "#654231" }), depthBias: 1.4 }));
+    const peelGeo = merge(box({ w: 0.42, h: 0.03, d: 0.12, color: "#c9b23a", offset: { x: 0.12 } }), box({ w: 0.05, h: 0.05, d: 0.05, color: "#5a3a1a", offset: { x: -0.1 } }));
+    for (const [px, pz, ry] of [[2.4, 1.9, 0.7], [2.9, 0.6, 2.4], [-2.6, 2.2, 1.3]]) addChild(room, createNode({ position: { x: px, y: 0.026, z: pz }, rotation: { x: 0, y: ry, z: 0 }, geometry: peelGeo, depthBias: 1.6 }));
+    // The bed: a low platform and a headboard on the back wall, the bedroll on top
+    const bedNode = createNode({
+      position: { x: bed.x, y: 0, z: bed.z },
+      geometry: merge(
+        box({ w: 2.8, h: 0.3, d: 1.6, color: "#4a3a2a", offset: { y: 0.15 } }),
+        box({ w: 2.9, h: 0.86, d: 0.16, color: "#3f3327", offset: { y: 0.73, z: -0.78 } }),
+        box({ w: 0.18, h: 1, d: 0.2, color: "#4a3a2a", offset: { x: -1.42, y: 0.5, z: -0.78 } }),
+        box({ w: 0.18, h: 1, d: 0.2, color: "#4a3a2a", offset: { x: 1.42, y: 0.5, z: -0.78 } })
+      )
+    });
+    prop(bedNode, "bed", 1.3);
+    addChild(room, bedNode);
+    // The nightstand and the night snack on it
+    const standX = bed.x + 2, standZ = bed.z + 0.1;
+    addChild(room, createNode({
+      position: { x: standX, y: 0, z: standZ },
+      geometry: merge(
+        box({ w: 0.72, h: 0.12, d: 0.72, color: "#5b4a38", offset: { y: 0.6 } }),
+        box({ w: 0.6, h: 0.54, d: 0.6, color: "#4a3a2a", offset: { y: 0.3 } }),
+        box({ w: 0.14, h: 0.1, d: 0.14, color: "#3a2d20", offset: { y: 0.1, x: -0.2, z: -0.2 } }),
+        box({ w: 0.14, h: 0.1, d: 0.14, color: "#3a2d20", offset: { y: 0.1, x: 0.2, z: 0.2 } })
+      )
+    }));
+    const snack = createNode({
+      position: { x: standX - 0.06, y: 0.72, z: standZ + 0.04 },
+      rotation: { x: 0, y: 0.6, z: 0 },
+      scale: { x: BANANA_AMMO_SCALE, y: BANANA_AMMO_SCALE, z: BANANA_AMMO_SCALE },
+      geometry: bananaGeometry()
+    });
+    prop(snack, "snack", 0.4);
+    addChild(room, snack);
+    // The gas-mask peg on one wall, the mask resting on its rail
+    const peg = createNode({ position: { x: -half + 0.1, y: 1.5, z: 0.1 }, rotation: { x: 0, y: Math.PI / 2, z: 0 } });
+    addChild(peg, createNode({
+      geometry: merge(
+        box({ w: 1.2, h: 1.6, d: 0.1, color: "#4a3a2a", offset: { y: 0.1 } }),
+        box({ w: 1.2, h: 0.12, d: 0.34, color: "#5b4a38", offset: { y: -0.66, z: 0.16 } }),
+        box({ w: 0.1, h: 0.1, d: 0.2, color: "#3a2d20", offset: { y: 0.78, z: 0.14 } })
+      )
+    }));
+    const mask = createNode({ position: { x: -0.15, y: -0.6, z: 0.24 }, rotation: { x: 0, y: 0.2, z: 0 }, geometry: gasMaskGeometry() });
+    prop(mask, "mask", 0.4);
+    addChild(peg, mask);
+    addChild(room, peg);
+    // A small desk: a slate, a lamp and a die
+    const desk = createNode({ position: { x: -half + 1.5, y: 0, z: -2.2 }, rotation: { x: 0, y: 0.4, z: 0 } });
+    addChild(desk, createNode({
+      geometry: merge(
+        box({ w: 1.7, h: 0.12, d: 0.9, color: "#5b4a38", offset: { y: 0.94 } }),
+        ...[[-0.74, -0.34], [0.74, -0.34], [-0.74, 0.34], [0.74, 0.34]].map(([x, z]) => box({ w: 0.12, h: 0.88, d: 0.12, color: "#3a2d20", offset: { x, y: 0.44, z } })),
+        box({ w: 0.42, h: 0.05, d: 0.56, color: "#5a4a38", offset: { x: -0.3, y: 1.03, z: 0.02 } }),
+        box({ w: 0.36, h: 0.02, d: 0.5, color: "#8a7a63", offset: { x: -0.3, y: 1.06, z: 0.02 } }),
+        box({ w: 0.22, h: 0.18, d: 0.22, color: "#3f3327", offset: { x: 0.36, y: 1.09, z: -0.14 } })
+      )
+    }));
+    const deskDie = createNode({ position: { x: 0.06, y: 1.1, z: 0.24 }, rotation: { ...dieRotationFor(4, 0.7) }, geometry: die({ size: 0.18 }) });
+    deskDie.dieSize = 0.18;
+    prop(deskDie, "die", 0.3);
+    addChild(desk, deskDie);
+    addChild(room, desk);
+    // A die left on the floor mid-game
+    const floorDie = createNode({ position: { x: 2.1, y: 0.16, z: 1.1 }, rotation: { x: 0, y: 1.1, z: 0 }, geometry: die({ size: 0.32 }) });
+    floorDie.dieSize = 0.32;
+    prop(floorDie, "die", 0.36);
+    addChild(room, floorDie);
+    // Shelves on the far wall with a crate stack beside them
+    const shelf = createNode({ position: { x: half - 0.16, y: 0, z: -1.5 }, rotation: { x: 0, y: -Math.PI / 2, z: 0 } });
+    addChild(shelf, createNode({
+      geometry: merge(
+        box({ w: 1.9, h: 2.1, d: 0.1, color: "#3f3327", offset: { y: 1.05 } }),
+        ...[0.7, 1.4, 2].map((y) => box({ w: 1.9, h: 0.08, d: 0.44, color: "#5b4a38", offset: { y, z: 0.2 } })),
+        box({ w: 0.3, h: 0.34, d: 0.28, color: "#6b4a26", offset: { x: -0.55, y: 0.91, z: 0.22 } }),
+        box({ w: 0.24, h: 0.28, d: 0.24, color: "#8a6236", offset: { x: 0.2, y: 0.88, z: 0.22 } }),
+        box({ w: 0.26, h: 0.26, d: 0.26, color: "#d8892b", emissive: 0.35, offset: { x: 0.72, y: 1.68, z: 0.22 } })
+      )
+    }));
+    addChild(room, shelf);
+    const crateGeo = merge(
+      box({ w: 0.86, h: 0.86, d: 0.86, color: "#8a6236", offset: { y: 0.43 } }),
+      ...[0.8, 0.12].flatMap((y) => [-0.4, 0.4].map((z) => box({ w: 0.9, h: 0.1, d: 0.1, color: "#5c4425", offset: { y, z } })))
+    );
+    const crateA = createNode({ position: { x: half - 1.1, y: 0, z: 1.5 }, rotation: { x: 0, y: 0.3, z: 0 }, geometry: crateGeo });
+    prop(crateA, "crate", 0.9);
+    const crateB = createNode({ position: { x: half - 1.15, y: 0.86, z: 1.44 }, rotation: { x: 0, y: -0.4, z: 0 }, geometry: crateGeo });
+    prop(crateB, "crate", 0.9);
+    addChild(room, crateA, crateB);
+    // Corner lanterns over the headboard, panes emissive so the scene can glow them
+    const lanternGeo = merge(
+      box({ w: 0.06, h: 0.1, d: 0.06, color: "#3a2a18", offset: { y: 0.2 } }),
+      box({ w: 0.32, h: 0.05, d: 0.32, color: "#2b2521", offset: { y: 0.12 } }),
+      box({ w: 0.34, h: 0.06, d: 0.34, color: "#2b2521", offset: { y: -0.32 } }),
+      ...[[-0.14, -0.14], [0.14, -0.14], [-0.14, 0.14], [0.14, 0.14]].map(([x, z]) => box({ w: 0.03, h: 0.34, d: 0.03, color: "#2b2521", offset: { x, y: -0.09, z } })),
+      box({ w: 0.16, h: 0.3, d: 0.16, color: "#ffd27a", emissive: 1, offset: { y: -0.09 } })
+    );
+    lanternGeo.castShadow = false;
+    for (const lx of [bed.x - 2.6, bed.x + 2.6]) {
+      const lantern = createNode({ position: { x: lx, y: wallH - 0.5, z: bed.z - 0.5 }, geometry: lanternGeo });
+      lantern.flare = 0;
+      lantern.glow = 0.8;
+      lanterns.push(lantern);
+      prop(lantern, "lantern", 0.5);
+      addChild(room, lantern);
+    }
+    return {
+      room,
+      bed: { x: bed.x, y: 0.72, z: bed.z },
+      bedNode,
+      spots: {
+        mask: { x: -half + 0.34, y: 1.1, z: 0.25 },
+        snack: { x: standX, y: 0.85, z: standZ },
+        desk: { x: -half + 1.5, y: 1.2, z: -2.2 }
+      },
+      interactive,
+      lanterns,
+      bedrolls: [{ x: bed.x, z: bed.z }]
+    };
+  };
+
   const buildableGeos = [
     cached(() => merge(
       box({ w: 0.8, h: 1.3, d: 0.5, color: "#1b1d1f", offset: { y: 0.65 } }),
@@ -1058,5 +1206,5 @@
       item.buildNode = () => createNode({ geometry: swagGeo(item.id, item.build) });
     }
   }
-  BL.models = { box, panel, lathe, tube, ring, polyline, merge, voxelFaces, banana, bananaGeometry, bananaTileGeometry, bananaPileCoreGeometry, bananaPileRadiusScale, bananaPileHeightOffset, BANANA_AMMO_SCALE, BANANA_PILE_PROFILE, particleGeometry, caveman, labRoom, buildableGeos, crate, dieRotationFor, SWAG, TIER_COLORS };
+  BL.models = { box, panel, lathe, tube, ring, polyline, merge, voxelFaces, banana, bananaGeometry, bananaTileGeometry, bananaPileCoreGeometry, bananaPileRadiusScale, bananaPileHeightOffset, BANANA_AMMO_SCALE, BANANA_PILE_PROFILE, particleGeometry, caveman, labRoom, denRoom, buildableGeos, crate, dieRotationFor, SWAG, TIER_COLORS };
 })();

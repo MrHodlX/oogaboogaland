@@ -11,7 +11,7 @@
     slot("c1", 1, null, "mirror", "Ooga Booga Land"),
     slot("c2", 2),
     slot("c3", 3),
-    slot("c5", 5, null, "sleeping")
+    slot("c5", 5, "hodl", "open", "MrHodl's Den")
   ];
   BL.caves = { slots, gate: { name: "The old gate" } };
 })();

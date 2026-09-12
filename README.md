@@ -21,6 +21,9 @@ The 9 o'clock cave is **Ooga Rally**, a kart race the size of a world: pick an O
 ride (on foot, a Rock Kart or a Dino) and one of three tracks (Banana Bay, Lava Gorge,
 Frost Peak), then race the crew over three laps.
 
+The 5 o'clock cave is **MrHodl's Den**, a quiet bedroom: walk to the bed or press
+**Space** beside it to sleep, **Space** again to wake, **Escape** to wake and then leave.
+
 The island keeps your local date and time. The sun, moon, stars, sky, light and shadows
 move continuously through dawn, morning, noon, dusk, night and midnight; the torches, the fire pit and the sign lanterns light at dusk,
 butterflies give way to fireflies, the crew gathers at the fire and talks about the hour,

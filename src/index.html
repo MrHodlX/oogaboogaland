@@ -154,6 +154,7 @@
         <h1><span data-sign>Ooga Booga Land</span></h1>
         <p data-scene="hub" id="subtitle">an island of caves</p>
         <p data-scene="lab" hidden>EntropyLab cave</p>
+        <p data-scene="hodl" hidden>MrHodl's Den</p>
       </div>
       <nav class="presets" aria-label="Camera views" data-scene="hub">
         <button type="button" data-preset="pile">Pile</button>
@@ -170,6 +171,15 @@
         <button type="button" class="reset-view" data-action="reset-view"
           title="Back to the landing view (0)">Reset<span> view</span></button>
         <button type="button" class="leave" data-action="leave" data-scene="lab" hidden>Leave<span> cave</span></button>
+      </nav>
+      <nav class="presets" aria-label="Camera views" data-scene="hodl" hidden>
+        <button type="button" data-preset="room">Room</button>
+        <button type="button" data-preset="bed">Bed</button>
+        <button type="button" data-preset="desk">Desk</button>
+        <button type="button" data-preset="pegs">Pegs</button>
+        <button type="button" class="reset-view" data-action="reset-view"
+          title="Back to the landing view (0)">Reset<span> view</span></button>
+        <button type="button" class="leave" data-action="leave" data-scene="hodl" hidden>Leave<span> cave</span></button>
       </nav>
       <nav class="presets" aria-label="Race" data-scene="race" hidden>
         <button type="button" data-action="garage" id="race-garage-btn">Garage</button>
@@ -416,6 +426,7 @@
   <script src="js/drop-models.js"></script>
   <script src="js/scene-hub.js"></script>
   <script src="js/scene-lab.js"></script>
+  <script src="js/scene-hodl.js"></script>
   <script src="js/race-track.js"></script>
   <script src="js/racers.js"></script>
   <script src="js/race-items.js"></script>

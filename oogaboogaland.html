@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none'; script-src 'sha256-KwNgMn6sy/QPc/okbUdlWNp7TpjEqCfsQ0fdfu5yN1U='; style-src 'sha256-3C/lZtrs9H11VfLxejw4WH1Oq4EePnFjR7bYVG9kp+c='; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+    content="default-src 'none'; script-src 'sha256-3lTn9oNa8EbiQRSiKUr9lgYO335xl/SXyR54I66okk0='; style-src 'sha256-3C/lZtrs9H11VfLxejw4WH1Oq4EePnFjR7bYVG9kp+c='; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0a0a0b">
@@ -2028,6 +2028,7 @@ select {
         <h1><span data-sign>Ooga Booga Land</span></h1>
         <p data-scene="hub" id="subtitle">an island of caves</p>
         <p data-scene="lab" hidden>EntropyLab cave</p>
+        <p data-scene="hodl" hidden>MrHodl's Den</p>
       </div>
       <nav class="presets" aria-label="Camera views" data-scene="hub">
         <button type="button" data-preset="pile">Pile</button>
@@ -2044,6 +2045,15 @@ select {
         <button type="button" class="reset-view" data-action="reset-view"
           title="Back to the landing view (0)">Reset<span> view</span></button>
         <button type="button" class="leave" data-action="leave" data-scene="lab" hidden>Leave<span> cave</span></button>
+      </nav>
+      <nav class="presets" aria-label="Camera views" data-scene="hodl" hidden>
+        <button type="button" data-preset="room">Room</button>
+        <button type="button" data-preset="bed">Bed</button>
+        <button type="button" data-preset="desk">Desk</button>
+        <button type="button" data-preset="pegs">Pegs</button>
+        <button type="button" class="reset-view" data-action="reset-view"
+          title="Back to the landing view (0)">Reset<span> view</span></button>
+        <button type="button" class="leave" data-action="leave" data-scene="hodl" hidden>Leave<span> cave</span></button>
       </nav>
       <nav class="presets" aria-label="Race" data-scene="race" hidden>
         <button type="button" data-action="garage" id="race-garage-btn">Garage</button>
@@ -6765,6 +6775,154 @@ void main() {
     }
     return { room, leds, bedrolls, equipment, hatch: { node: hatch, set: setHatch } };
   };
+  // MrHodl's den: a snug sleeping room whose bed, nightstand, mask peg, desk,
+  // shelves, crates and lanterns come back as interactive props for the scene
+  const denRoom = ({ half = 6.4, wallH = 3.4, bed = { x: 0.2, z: -4.2 } } = {}) => {
+    const room = createNode();
+    const lanterns = [];
+    const interactive = [];
+    const prop = (node, kind, radius = 0) => {
+      interactive.push({ node, kind, radius });
+      return node;
+    };
+    const floorGeo = panel({ w: half * 2, h: half * 2, tilesX: 8, tilesY: 8, color: "#2a231c", altColor: "#241e18" });
+    addChild(room, createNode({ rotation: { x: -Math.PI / 2, y: 0, z: 0 }, geometry: floorGeo, depthBias: 1.2 }));
+    const wallGeo = panel({ w: half * 2, h: wallH, tilesX: 8, tilesY: 3, color: "#2b241d", altColor: "#261f19" });
+    const skirtGeo = box({ w: half * 2, h: 0.16, d: 0.06, color: "#342b22", offset: { y: 0.08, z: 0.03 } });
+    const wallAt = (x, z, ry) => {
+      const wall = createNode({ position: { x, y: 0, z }, rotation: { x: 0, y: ry, z: 0 } });
+      addChild(wall, createNode({ position: { x: 0, y: wallH / 2, z: 0 }, geometry: wallGeo, depthBias: 1.1 }), createNode({ geometry: skirtGeo }));
+      return wall;
+    };
+    addChild(room, wallAt(0, -half, 0), wallAt(-half, 0, Math.PI / 2), wallAt(half, 0, -Math.PI / 2), wallAt(0, half, Math.PI));
+    const ceilingGeo = panel({ w: half * 2, h: half * 2, tilesX: 6, tilesY: 6, color: "#1b1611", altColor: "#18140f" });
+    ceilingGeo.castShadow = false;
+    addChild(room, createNode({ position: { x: 0, y: wallH, z: 0 }, rotation: { x: Math.PI / 2, y: 0, z: 0 }, geometry: ceilingGeo }));
+    // Low beams read the ceiling as a den rather than a hall
+    const beamGeo = box({ w: half * 2, h: 0.2, d: 0.22, color: "#3a2d20" });
+    addChild(room, createNode({ position: { x: 0, y: wallH - 0.11, z: -half + 2.6 }, geometry: beamGeo }), createNode({ position: { x: 0, y: wallH - 0.11, z: 1.4 }, geometry: beamGeo }));
+    // A rug, and the peels MrHodl never got round to sweeping
+    addChild(room, createNode({ position: { x: 0.2, y: 0.02, z: 0.5 }, rotation: { x: -Math.PI / 2, y: 0, z: 0 }, geometry: panel({ w: 4, h: 3.2, tilesX: 6, tilesY: 5, color: "#5a3a2a", altColor: "#654231" }), depthBias: 1.4 }));
+    const peelGeo = merge(box({ w: 0.42, h: 0.03, d: 0.12, color: "#c9b23a", offset: { x: 0.12 } }), box({ w: 0.05, h: 0.05, d: 0.05, color: "#5a3a1a", offset: { x: -0.1 } }));
+    for (const [px, pz, ry] of [[2.4, 1.9, 0.7], [2.9, 0.6, 2.4], [-2.6, 2.2, 1.3]]) addChild(room, createNode({ position: { x: px, y: 0.026, z: pz }, rotation: { x: 0, y: ry, z: 0 }, geometry: peelGeo, depthBias: 1.6 }));
+    // The bed: a low platform and a headboard on the back wall, the bedroll on top
+    const bedNode = createNode({
+      position: { x: bed.x, y: 0, z: bed.z },
+      geometry: merge(
+        box({ w: 2.8, h: 0.3, d: 1.6, color: "#4a3a2a", offset: { y: 0.15 } }),
+        box({ w: 2.9, h: 0.86, d: 0.16, color: "#3f3327", offset: { y: 0.73, z: -0.78 } }),
+        box({ w: 0.18, h: 1, d: 0.2, color: "#4a3a2a", offset: { x: -1.42, y: 0.5, z: -0.78 } }),
+        box({ w: 0.18, h: 1, d: 0.2, color: "#4a3a2a", offset: { x: 1.42, y: 0.5, z: -0.78 } })
+      )
+    });
+    prop(bedNode, "bed", 1.3);
+    addChild(room, bedNode);
+    // The nightstand and the night snack on it
+    const standX = bed.x + 2, standZ = bed.z + 0.1;
+    addChild(room, createNode({
+      position: { x: standX, y: 0, z: standZ },
+      geometry: merge(
+        box({ w: 0.72, h: 0.12, d: 0.72, color: "#5b4a38", offset: { y: 0.6 } }),
+        box({ w: 0.6, h: 0.54, d: 0.6, color: "#4a3a2a", offset: { y: 0.3 } }),
+        box({ w: 0.14, h: 0.1, d: 0.14, color: "#3a2d20", offset: { y: 0.1, x: -0.2, z: -0.2 } }),
+        box({ w: 0.14, h: 0.1, d: 0.14, color: "#3a2d20", offset: { y: 0.1, x: 0.2, z: 0.2 } })
+      )
+    }));
+    const snack = createNode({
+      position: { x: standX - 0.06, y: 0.72, z: standZ + 0.04 },
+      rotation: { x: 0, y: 0.6, z: 0 },
+      scale: { x: BANANA_AMMO_SCALE, y: BANANA_AMMO_SCALE, z: BANANA_AMMO_SCALE },
+      geometry: bananaGeometry()
+    });
+    prop(snack, "snack", 0.4);
+    addChild(room, snack);
+    // The gas-mask peg on one wall, the mask resting on its rail
+    const peg = createNode({ position: { x: -half + 0.1, y: 1.5, z: 0.1 }, rotation: { x: 0, y: Math.PI / 2, z: 0 } });
+    addChild(peg, createNode({
+      geometry: merge(
+        box({ w: 1.2, h: 1.6, d: 0.1, color: "#4a3a2a", offset: { y: 0.1 } }),
+        box({ w: 1.2, h: 0.12, d: 0.34, color: "#5b4a38", offset: { y: -0.66, z: 0.16 } }),
+        box({ w: 0.1, h: 0.1, d: 0.2, color: "#3a2d20", offset: { y: 0.78, z: 0.14 } })
+      )
+    }));
+    const mask = createNode({ position: { x: -0.15, y: -0.6, z: 0.24 }, rotation: { x: 0, y: 0.2, z: 0 }, geometry: gasMaskGeometry() });
+    prop(mask, "mask", 0.4);
+    addChild(peg, mask);
+    addChild(room, peg);
+    // A small desk: a slate, a lamp and a die
+    const desk = createNode({ position: { x: -half + 1.5, y: 0, z: -2.2 }, rotation: { x: 0, y: 0.4, z: 0 } });
+    addChild(desk, createNode({
+      geometry: merge(
+        box({ w: 1.7, h: 0.12, d: 0.9, color: "#5b4a38", offset: { y: 0.94 } }),
+        ...[[-0.74, -0.34], [0.74, -0.34], [-0.74, 0.34], [0.74, 0.34]].map(([x, z]) => box({ w: 0.12, h: 0.88, d: 0.12, color: "#3a2d20", offset: { x, y: 0.44, z } })),
+        box({ w: 0.42, h: 0.05, d: 0.56, color: "#5a4a38", offset: { x: -0.3, y: 1.03, z: 0.02 } }),
+        box({ w: 0.36, h: 0.02, d: 0.5, color: "#8a7a63", offset: { x: -0.3, y: 1.06, z: 0.02 } }),
+        box({ w: 0.22, h: 0.18, d: 0.22, color: "#3f3327", offset: { x: 0.36, y: 1.09, z: -0.14 } })
+      )
+    }));
+    const deskDie = createNode({ position: { x: 0.06, y: 1.1, z: 0.24 }, rotation: { ...dieRotationFor(4, 0.7) }, geometry: die({ size: 0.18 }) });
+    deskDie.dieSize = 0.18;
+    prop(deskDie, "die", 0.3);
+    addChild(desk, deskDie);
+    addChild(room, desk);
+    // A die left on the floor mid-game
+    const floorDie = createNode({ position: { x: 2.1, y: 0.16, z: 1.1 }, rotation: { x: 0, y: 1.1, z: 0 }, geometry: die({ size: 0.32 }) });
+    floorDie.dieSize = 0.32;
+    prop(floorDie, "die", 0.36);
+    addChild(room, floorDie);
+    // Shelves on the far wall with a crate stack beside them
+    const shelf = createNode({ position: { x: half - 0.16, y: 0, z: -1.5 }, rotation: { x: 0, y: -Math.PI / 2, z: 0 } });
+    addChild(shelf, createNode({
+      geometry: merge(
+        box({ w: 1.9, h: 2.1, d: 0.1, color: "#3f3327", offset: { y: 1.05 } }),
+        ...[0.7, 1.4, 2].map((y) => box({ w: 1.9, h: 0.08, d: 0.44, color: "#5b4a38", offset: { y, z: 0.2 } })),
+        box({ w: 0.3, h: 0.34, d: 0.28, color: "#6b4a26", offset: { x: -0.55, y: 0.91, z: 0.22 } }),
+        box({ w: 0.24, h: 0.28, d: 0.24, color: "#8a6236", offset: { x: 0.2, y: 0.88, z: 0.22 } }),
+        box({ w: 0.26, h: 0.26, d: 0.26, color: "#d8892b", emissive: 0.35, offset: { x: 0.72, y: 1.68, z: 0.22 } })
+      )
+    }));
+    addChild(room, shelf);
+    const crateGeo = merge(
+      box({ w: 0.86, h: 0.86, d: 0.86, color: "#8a6236", offset: { y: 0.43 } }),
+      ...[0.8, 0.12].flatMap((y) => [-0.4, 0.4].map((z) => box({ w: 0.9, h: 0.1, d: 0.1, color: "#5c4425", offset: { y, z } })))
+    );
+    const crateA = createNode({ position: { x: half - 1.1, y: 0, z: 1.5 }, rotation: { x: 0, y: 0.3, z: 0 }, geometry: crateGeo });
+    prop(crateA, "crate", 0.9);
+    const crateB = createNode({ position: { x: half - 1.15, y: 0.86, z: 1.44 }, rotation: { x: 0, y: -0.4, z: 0 }, geometry: crateGeo });
+    prop(crateB, "crate", 0.9);
+    addChild(room, crateA, crateB);
+    // Corner lanterns over the headboard, panes emissive so the scene can glow them
+    const lanternGeo = merge(
+      box({ w: 0.06, h: 0.1, d: 0.06, color: "#3a2a18", offset: { y: 0.2 } }),
+      box({ w: 0.32, h: 0.05, d: 0.32, color: "#2b2521", offset: { y: 0.12 } }),
+      box({ w: 0.34, h: 0.06, d: 0.34, color: "#2b2521", offset: { y: -0.32 } }),
+      ...[[-0.14, -0.14], [0.14, -0.14], [-0.14, 0.14], [0.14, 0.14]].map(([x, z]) => box({ w: 0.03, h: 0.34, d: 0.03, color: "#2b2521", offset: { x, y: -0.09, z } })),
+      box({ w: 0.16, h: 0.3, d: 0.16, color: "#ffd27a", emissive: 1, offset: { y: -0.09 } })
+    );
+    lanternGeo.castShadow = false;
+    for (const lx of [bed.x - 2.6, bed.x + 2.6]) {
+      const lantern = createNode({ position: { x: lx, y: wallH - 0.5, z: bed.z - 0.5 }, geometry: lanternGeo });
+      lantern.flare = 0;
+      lantern.glow = 0.8;
+      lanterns.push(lantern);
+      prop(lantern, "lantern", 0.5);
+      addChild(room, lantern);
+    }
+    return {
+      room,
+      bed: { x: bed.x, y: 0.72, z: bed.z },
+      bedNode,
+      spots: {
+        mask: { x: -half + 0.34, y: 1.1, z: 0.25 },
+        snack: { x: standX, y: 0.85, z: standZ },
+        desk: { x: -half + 1.5, y: 1.2, z: -2.2 }
+      },
+      interactive,
+      lanterns,
+      bedrolls: [{ x: bed.x, z: bed.z }]
+    };
+  };
+
   const buildableGeos = [
     cached(() => merge(
       box({ w: 0.8, h: 1.3, d: 0.5, color: "#1b1d1f", offset: { y: 0.65 } }),
@@ -6857,7 +7015,7 @@ void main() {
       item.buildNode = () => createNode({ geometry: swagGeo(item.id, item.build) });
     }
   }
-  BL.models = { box, panel, lathe, tube, ring, polyline, merge, voxelFaces, banana, bananaGeometry, bananaTileGeometry, bananaPileCoreGeometry, bananaPileRadiusScale, bananaPileHeightOffset, BANANA_AMMO_SCALE, BANANA_PILE_PROFILE, particleGeometry, caveman, labRoom, buildableGeos, crate, dieRotationFor, SWAG, TIER_COLORS };
+  BL.models = { box, panel, lathe, tube, ring, polyline, merge, voxelFaces, banana, bananaGeometry, bananaTileGeometry, bananaPileCoreGeometry, bananaPileRadiusScale, bananaPileHeightOffset, BANANA_AMMO_SCALE, BANANA_PILE_PROFILE, particleGeometry, caveman, labRoom, denRoom, buildableGeos, crate, dieRotationFor, SWAG, TIER_COLORS };
 })();
 
 // ---- js/terrain.js ----
@@ -7537,6 +7695,7 @@ void main() {
     C: ["011", "100", "100", "100", "011"],
     D: ["110", "101", "101", "101", "110"],
     F: ["111", "100", "110", "100", "100"],
+    H: ["101", "101", "111", "101", "101"],
     M: ["101", "111", "111", "101", "101"],
     P: ["110", "101", "110", "100", "100"],
     R: ["110", "101", "110", "101", "101"],
@@ -7554,6 +7713,7 @@ void main() {
     8: ["111", "101", "111", "101", "111"],
     9: ["111", "101", "111", "001", "111"],
     "!": ["010", "010", "010", "000", "010"],
+    "'": ["010", "010", "000", "000", "000"],
     "?": ["111", "001", "011", "000", "010"],
     ".": ["000", "000", "000", "000", "010"]
   };
@@ -7907,7 +8067,7 @@ void main() {
     slot("c1", 1, null, "mirror", "Ooga Booga Land"),
     slot("c2", 2),
     slot("c3", 3),
-    slot("c5", 5, null, "sleeping")
+    slot("c5", 5, "hodl", "open", "MrHodl's Den")
   ];
   BL.caves = { slots, gate: { name: "The old gate" } };
 })();
@@ -13007,6 +13167,15 @@ void main() {
       addProp("sign", sign, signX, signZ, 1);
       claim(roof.x, roof.z, 3.8);
       launchers.push(roof);
+    } else if (slot.status === "open" && slot.scene === "hodl") {
+      // Bedroom door: bedroll, crate stack with a night banana and a hanging lamp.
+      // No entrance torches/point lights — keeps the hub inside the 10-lamp budget.
+      addChild(group, createNode({ position: { x: 0, y: 0.05, z: -1.5 }, rotation: { x: 0, y: 0.4, z: 0 }, geometry: hubModels.bedroll(), depthBias: 0.3 }));
+      addChild(group, createNode({ position: { x: -1.75, y: 0, z: -1.05 }, rotation: { x: 0, y: 0.35, z: 0 }, geometry: hubModels.woodCrate() }));
+      addChild(group, createNode({ position: { x: -1.8, y: 0.88, z: -1.1 }, rotation: { x: 0, y: -0.25, z: 0 }, geometry: hubModels.woodCrate() }));
+      const bananaScale = models.BANANA_AMMO_SCALE;
+      addChild(group, createNode({ position: { x: -1.8, y: 1.84, z: -1.1 }, rotation: { x: 0, y: 0.6, z: 0 }, scale: { x: bananaScale, y: bananaScale, z: bananaScale }, geometry: models.bananaGeometry() }));
+      addChild(group, createNode({ position: { x: 0.35, y: 2.5, z: -1.25 }, geometry: hubModels.lantern(), matrixEmissiveLiving: true, glow: 0.85, flare: 0 }));
     } else if (slot.status === "open") {
       for (const x of [-1.3, 1.3]) addChild(group, createNode({ position: { x, y: 0, z: -3.5 }, geometry: hubModels.caveShelves() }));
     } else if (slot.status === "mirror") {
@@ -13020,22 +13189,26 @@ void main() {
       sleepers.push({ x: m.x + ax * 0.8, y: 4.4, z: m.z + az * 0.8, timer: sleepers.length * 0.7 });
     }
     if (slot.status === "open" || slot.status === "mirror") {
-      const torchGeometry = hubModels.torch();
-      const torchZ = rim.position.z + rim.geometry.frontZ - torchGeometry.backZ + CAVE_TORCH_GAP;
-      for (let i = 0; i < 2; i++) {
-        const side = i ? "right" : "left", localX = (i ? 1 : -1) * rim.geometry.jambCenterX;
-        const torch = createNode({ position: { x: localX, y: 0, z: torchZ }, geometry: torchGeometry, flare: 0, matrixEmissiveLiving: true });
-        addChild(group, torch);
-        const tx = m.x + ax * torchZ + Math.cos(m.ry) * localX;
-        const ty = m.floorY + torchGeometry.flameY;
-        const tz = m.z + az * torchZ - Math.sin(m.ry) * localX;
-        const id = `${slot.id}:torch:${side}`;
-        const lamp = addLamp(torch, LAMP.torch, tx, ty, tz, true, i, id);
-        const debug = { id, caveId: slot.id, kind: "torch", side, localPosition: [localX, torchGeometry.flameY, torchZ], worldPosition: [tx, ty, tz], registered: true, factor: 0, lit: false, selected: false, approximated: false, rimFront: rim.position.z + rim.geometry.frontZ, fixtureBack: torchZ + torchGeometry.backZ, gap: CAVE_TORCH_GAP };
-        lamp.debug = debug;
-        entranceLights.push(debug);
-        claim(tx, tz, 0.5);
-        addProp("torch", torch, tx, tz, 0.7);
+      // Hodl keeps the sign but skips the torch pair and sign-lantern so the hub
+      // stays inside the fixed ten point-light budget used by the other caves.
+      if (slot.scene !== "hodl") {
+        const torchGeometry = hubModels.torch();
+        const torchZ = rim.position.z + rim.geometry.frontZ - torchGeometry.backZ + CAVE_TORCH_GAP;
+        for (let i = 0; i < 2; i++) {
+          const side = i ? "right" : "left", localX = (i ? 1 : -1) * rim.geometry.jambCenterX;
+          const torch = createNode({ position: { x: localX, y: 0, z: torchZ }, geometry: torchGeometry, flare: 0, matrixEmissiveLiving: true });
+          addChild(group, torch);
+          const tx = m.x + ax * torchZ + Math.cos(m.ry) * localX;
+          const ty = m.floorY + torchGeometry.flameY;
+          const tz = m.z + az * torchZ - Math.sin(m.ry) * localX;
+          const id = `${slot.id}:torch:${side}`;
+          const lamp = addLamp(torch, LAMP.torch, tx, ty, tz, true, i, id);
+          const debug = { id, caveId: slot.id, kind: "torch", side, localPosition: [localX, torchGeometry.flameY, torchZ], worldPosition: [tx, ty, tz], registered: true, factor: 0, lit: false, selected: false, approximated: false, rimFront: rim.position.z + rim.geometry.frontZ, fixtureBack: torchZ + torchGeometry.backZ, gap: CAVE_TORCH_GAP };
+          lamp.debug = debug;
+          entranceLights.push(debug);
+          claim(tx, tz, 0.5);
+          addProp("torch", torch, tx, tz, 0.7);
+        }
       }
       const sign = createNode({ position: { x: 0, y: 4.5, z: 0.52 }, geometry: hubModels.caveSign(slot.name), matrixEmissiveLiving: true });
       addChild(group, sign);
@@ -13052,18 +13225,20 @@ void main() {
         ]
       });
       if (mirrorCave && mirrorCave.slot === slot) mirrorCave.sign = sign;
-      // A lantern hangs off the sign bracket and matches the entrance torches' dusk fade.
-      const lantern = createNode({ position: { x: halfW + 0.1, y: sign.position.y + halfH + 0.14, z: 0.52 }, geometry: hubModels.lantern() });
-      addChild(group, lantern);
-      const lx = lantern.position.x, ly = lantern.position.y - 0.27, lz = lantern.position.z;
-      const wx = m.x + Math.cos(m.ry) * lx + ax * lz;
-      const wy = m.floorY + ly;
-      const wz = m.z - Math.sin(m.ry) * lx + az * lz;
-      const id = `${slot.id}:lantern:right`;
-      const lamp = addLamp(lantern, LAMP.lantern, wx, wy, wz, true, 2, id);
-      const debug = { id, caveId: slot.id, kind: "lantern", side: "right", localPosition: [lx, ly, lz], worldPosition: [wx, wy, wz], registered: true, factor: 0, lit: false, selected: false, approximated: false, rimFront: null, fixtureBack: null, gap: null };
-      lamp.debug = debug;
-      entranceLights.push(debug);
+      if (slot.scene !== "hodl") {
+        // A lantern hangs off the sign bracket and matches the entrance torches' dusk fade.
+        const lantern = createNode({ position: { x: halfW + 0.1, y: sign.position.y + halfH + 0.14, z: 0.52 }, geometry: hubModels.lantern() });
+        addChild(group, lantern);
+        const lx = lantern.position.x, ly = lantern.position.y - 0.27, lz = lantern.position.z;
+        const wx = m.x + Math.cos(m.ry) * lx + ax * lz;
+        const wy = m.floorY + ly;
+        const wz = m.z - Math.sin(m.ry) * lx + az * lz;
+        const id = `${slot.id}:lantern:right`;
+        const lamp = addLamp(lantern, LAMP.lantern, wx, wy, wz, true, 2, id);
+        const debug = { id, caveId: slot.id, kind: "lantern", side: "right", localPosition: [lx, ly, lz], worldPosition: [wx, wy, wz], registered: true, factor: 0, lit: false, selected: false, approximated: false, rimFront: null, fixtureBack: null, gap: null };
+        lamp.debug = debug;
+        entranceLights.push(debug);
+      }
     }
     if (VINES.includes(slot.id)) for (const x of [-1.1, 1.1]) addChild(group, createNode({ position: { x, y: 3.45, z: 0.95 }, geometry: hubModels.vine() }));
     addChild(root, group);
@@ -13452,7 +13627,7 @@ void main() {
       case "crate":
         return `${o.crate.loot.tier} crate · tap to open`;
       case "cave":
-        return o.slot.status === "open" ? `${o.slot.name} · tap to enter` : o.slot.status === "mirror" ? `${o.slot.name} · mirror` : o.slot.status === "sleeping" ? "A project sleeps here · zzz" : "An empty cave";
+        return o.slot.status === "open" ? (o.slot.scene === "hodl" ? `${o.slot.name} · tap to rest` : `${o.slot.name} · tap to enter`) : o.slot.status === "mirror" ? `${o.slot.name} · mirror` : o.slot.status === "sleeping" ? "A project sleeps here · zzz" : "An empty cave";
       case "gate":
         return `${caves.gate.name} · leads nowhere yet`;
       case "prop":
@@ -14971,6 +15146,362 @@ void main() {
   };
   BL.scenes = BL.scenes || {};
   BL.scenes.lab = labScene;
+})();
+
+// ---- js/scene-hodl.js ----
+// MrHodl's Den: the island's quiet sleep cave
+(() => {
+  "use strict";
+  const BL = window.BL = window.BL || {};
+  const { math, models, contributors, hubModels, donations, qr, game: gameMod, hud: hudMod, interact: interactMod, pilot: pilotMod, fx: fxMod } = BL;
+  const { clamp, ease, randomInt } = math;
+  const { createNode, addChild, removeChild, createCamera, addTween, stepTweens, tweenCount, traverseVisible } = BL.scene;
+  const params = new URLSearchParams(location.search);
+  const ROOM_HALF = 6.4, WALL_H = 3.4;
+  const WALL = ROOM_HALF - 0.6;
+  const COARSE = window.matchMedia("(pointer: coarse)").matches;
+  const yawParam = parseFloat(params.get("yaw"));
+  // The bed spot, the reach that lies the visitor down and the zzz beat
+  const BED = { x: 0.2, y: 0.66, z: -ROOM_HALF + 2.2 };
+  const SLEEP_REACH = 1.7, ZZZ_EVERY = 1.7;
+  // Orbit, follow and flight limits
+  const PITCH = [0.12, 1.1], DIST = [3, 7.8];
+  const FOLLOW = { y: 0.9, min: 3, max: 6, pitch: [0.25, 0.8] };
+  const FLY = { speed: 3.2, perDist: 0.35, climb: 2.4, yMax: WALL_H - 0.7 };
+  const PRESETS = {
+    room: { yaw: Number.isFinite(yawParam) ? yawParam : 0, pitch: 0.34, dist: 6.8, target: { x: 0, y: 1.25, z: -1.1 } },
+    bed: { yaw: -0.35, pitch: 0.46, dist: 4.6, target: { x: BED.x, y: 0.9, z: BED.z + 1.2 } },
+    sleep: { yaw: -0.55, pitch: 0.7, dist: 3.2, target: { x: BED.x, y: 0.62, z: BED.z } },
+    desk: { yaw: -1.3, pitch: 0.3, dist: 4.4, target: { x: -ROOM_HALF + 1.5, y: 0.95, z: -2.2 } },
+    pegs: { yaw: 1.25, pitch: 0.24, dist: 4.2, target: { x: ROOM_HALF - 0.7, y: 1.5, z: 0.4 } }
+  };
+  const RENDER_OPTS = { shadowCenter: { x: 0, y: 1.2, z: 0 }, shadowExtent: 9 };
+  // Where the thank-you ticker hangs
+  const TICKER_AT = { x: 0, y: 2.95, z: -ROOM_HALF + 0.3 };
+  // The mask has the last word on being woken
+  const SLEEPY_LINES = ["five more minutes", "zzz", "not yet...", "warm in here"];
+  const clampDrag = (p) => {
+    p.x = clamp(p.x, -ROOM_HALF + 0.5, ROOM_HALF - 0.5);
+    p.z = clamp(p.z, -ROOM_HALF + 0.5, ROOM_HALF - 0.5);
+    return p;
+  };
+  const mark = (name) => {
+    performance.clearMarks(`ooga:${name}`);
+    performance.mark(`ooga:${name}`);
+  };
+  // The den has no build quotes to draw between the bubbles and the ticker
+  const NO_QUOTES = () => {};
+  // One particle set for every gentle burst in the den
+  const SLEEP_SPARKS = [models.particleGeometry("#ffb347", 0.08, 1), models.particleGeometry("#f3efe4", 0.07, 0.6)];
+  // One visit's state, made in enter and dropped in leave
+  let renderer, game, world, go, lootEnabled, root, camera, den, hud, hooks, input, pilot, fx;
+  let hintTimer = 0, zzzTimer = 0, sleepyLine = 0, sleeping = false, nearBed = false;
+  const propTargets = [];
+  const clampTarget = (t) => {
+    t.x = clamp(t.x, -WALL, WALL);
+    t.z = clamp(t.z, -WALL, WALL);
+  };
+  const clampCamera = (p) => {
+    p.x = clamp(p.x, -ROOM_HALF + 0.4, ROOM_HALF - 0.4);
+    p.z = clamp(p.z, -ROOM_HALF + 0.4, ROOM_HALF - 0.4);
+    p.y = clamp(p.y, 0.4, WALL_H - 0.3);
+  };
+  // How far the visitor's view target stands from the bed
+  const bedDistance = () => Math.hypot(pilot.orbit.target.x - BED.x, pilot.orbit.target.z - BED.z);
+  // ---------- sleep ----------
+  // Sleeping is one flag and one view: the camera settles over the bed, zzz drift
+  // up and the lanterns stay warm. Space, the act button or Escape wakes.
+  // Escape while awake leaves for the island, so the first Escape out of a den
+  // you are asleep in wakes you and the second one walks you home.
+  const sleep = () => {
+    if (sleeping) return false;
+    sleeping = true;
+    zzzTimer = 0;
+    pilot.goPreset("sleep");
+    nearBed = true;
+    hud.el.act.hidden = false;
+    hud.setAct("Wake");
+    hud.hint(COARSE ? "zzz... tap Ooga! to wake" : "zzz... Space or Ooga! wakes");
+    return true;
+  };
+  const wake = () => {
+    if (!sleeping) return false;
+    sleeping = false;
+    zzzTimer = 0;
+    pilot.goPreset("bed");
+    // Waking up on the bedroll must not drop straight back into sleep
+    nearBed = bedDistance() <= SLEEP_REACH;
+    hud.el.act.hidden = false;
+    hud.setAct("Sleep");
+    fx.sayAt(BED.x, BED.y + 0.5, BED.z, "Ooga.", 1.6);
+    return true;
+  };
+  // Space and the act button do the same thing: wake, or lie down in reach
+  const actKey = () => {
+    if (sleeping) return wake();
+    if (bedDistance() <= SLEEP_REACH) return sleep();
+    hud.toast("The bed is in the back corner");
+    return false;
+  };
+  // ---------- donations ----------
+  // A tip only stirs the den: the lanterns flare, a little confetti settles on the
+  // bedroll and the mask mutters back. Nothing here touches the shared pile.
+  const onDonation = (donation) => {
+    game.recordDonation(donation);
+    for (const lamp of den.lanterns) lamp.flare = 1;
+    fx.burst(BED.x, BED.y + 0.35, BED.z, 14, SLEEP_SPARKS, 1.1);
+    fx.zzzAt(BED.x + 0.5, BED.y + 0.45, BED.z);
+    fx.sayAt(den.spots.mask.x, den.spots.mask.y, den.spots.mask.z, "zzz... thanks", 2.2);
+    hud.toast(`+${gameMod.formatLarge(donation.sats)} sats · the den glows${donation.handle ? ` · @${donation.handle}` : ""}`);
+    hud.setStats(game.state);
+  };
+  const demoTip = (sats) => onDonation({ id: `demo-${Date.now()}`, sats, handle: game.state.handle, message: game.state.message, at: Date.now() });
+  // ---------- props ----------
+  const rollDie = (dieNode) => {
+    if (dieNode.rolling) return;
+    dieNode.rolling = true;
+    const result = randomInt(6) + 1;
+    const startY = dieNode.position.y;
+    const r0 = { ...dieNode.rotation };
+    const final = models.dieRotationFor(result, r0.y + 1.7);
+    addTween({
+      dur: 0.7, ease: ease.linear, update: (k) => {
+        dieNode.position.y = startY + Math.sin(k * Math.PI) * 0.5;
+        dieNode.rotation.x = r0.x + k * Math.PI * 4;
+        dieNode.rotation.z = r0.z + k * Math.PI * 2;
+        dieNode.rotation.y = r0.y + k * 1.7;
+      }, done: () => {
+        Object.assign(dieNode.rotation, final);
+        dieNode.position.y = startY;
+        dieNode.rolling = false;
+        dieNode.lastRoll = result;
+        const w = dieNode.world;
+        fx.sayAt(w[12], w[13] + dieNode.dieSize * 0.5 + 0.2, w[14], `Rolled ${result}`, 1.8);
+      }
+    });
+  };
+  // The night snack bobs and takes a bite, then settles back on the nightstand
+  const biteSnack = (snack) => {
+    const y0 = snack.position.y;
+    addTween({
+      dur: 0.5, ease: ease.inOutQuad, update: (k) => {
+        snack.position.y = y0 + Math.sin(k * Math.PI) * 0.12;
+        snack.rotation.z = k * Math.PI * 0.4;
+      }, done: () => {
+        snack.position.y = y0;
+        snack.rotation.z = 0;
+      }
+    });
+    const w = snack.world;
+    fx.sayAt(w[12], w[13] + 0.35, w[14], "Nom.", 1.6);
+  };
+  const tooltipFor = (hit) => {
+    const o = hit.owner;
+    switch (o.kind) {
+      case "bed":
+        return sleeping ? "Bedroll · tap to wake" : "Bedroll · tap to sleep";
+      case "mask":
+        return "Gas-mask peg · MrHodl's";
+      case "snack":
+        return "Night snack · tap to nibble";
+      case "die":
+        return "Die · tap to roll";
+      case "crate":
+        return "Banana crate · tap to peek";
+      case "lantern":
+        return "Lantern · tap to stoke";
+      default:
+        return "";
+    }
+  };
+  const onTap = (hit) => {
+    if (!hit) return;
+    const o = hit.owner;
+    switch (o.kind) {
+      case "bed":
+        if (sleeping) wake();
+        else sleep();
+        break;
+      case "mask": {
+        const spot = den.spots.mask;
+        fx.sayAt(spot.x, spot.y, spot.z, SLEEPY_LINES[sleepyLine++ % SLEEPY_LINES.length], 2.2);
+        break;
+      }
+      case "snack":
+        biteSnack(o.node);
+        break;
+      case "die":
+        rollDie(o.node);
+        break;
+      case "crate": {
+        const w = o.node.world;
+        fx.sayAt(w[12], w[13] + 1.1, w[14], "Full of bananas", 2);
+        for (const lamp of den.lanterns) lamp.flare = 0.6;
+        break;
+      }
+      case "lantern": {
+        o.node.flare = 1;
+        const w = o.node.world;
+        fx.sayAt(w[12], w[13] - 0.3, w[14], "warm", 1.6);
+        break;
+      }
+      default:
+        break;
+    }
+  };
+  // ---------- per frame ----------
+  const update = (dt, elapsed) => {
+    pilot.readInput(dt);
+    // The lanterns breathe; a tap or a donation flares them warm
+    const breath = 0.78 + Math.sin(elapsed * 1.6) * 0.05 + Math.sin(elapsed * 4.7) * 0.025;
+    for (let i = 0; i < den.lanterns.length; i++) {
+      const lamp = den.lanterns[i];
+      let glow = breath + Math.sin(elapsed * 2.1 + i * 2.2) * 0.03;
+      if (lamp.flare > 0) {
+        lamp.flare = Math.max(0, lamp.flare - dt * 1.6);
+        glow += lamp.flare * 1.2;
+      }
+      lamp.glow = glow;
+    }
+    // The bed zone sleeps on the way in, never on the way out: waking up on the
+    // bedroll would otherwise put the visitor straight back to sleep.
+    const near = bedDistance() <= SLEEP_REACH;
+    if (sleeping) {
+      zzzTimer -= dt;
+      if (zzzTimer <= 0) {
+        zzzTimer = ZZZ_EVERY;
+        fx.zzzAt(BED.x + 0.5, BED.y + 0.45, BED.z);
+      }
+    } else if (near && !nearBed) {
+      // Walking the view into the bed zone lies the visitor down
+      sleep();
+    }
+    nearBed = near;
+    fx.update(dt);
+    stepTweens(dt);
+    pilot.update(dt);
+  };
+  const overlay = (dt) => fx.drawOverlay(dt, NO_QUOTES);
+  // ---------- actions and keys ----------
+  const onLootCleared = () => {
+    if (!lootEnabled) return;
+    hud.toast("Loot locker cleared");
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") {
+      if (sleeping) wake();
+      else go("hub");
+    }
+    if (e.key === " ") actKey();
+    if (e.key === "0") pilot.goPreset("room");
+    if (e.key === "l" || e.key === "L") demoTip(120000);
+  };
+  // ---------- scene contract ----------
+  const enter = (ctx) => {
+    ({ renderer, game, world, go, lootEnabled } = ctx);
+    camera = createCamera({ fov: 48, near: 0.25, far: 40 });
+    root = createNode();
+    den = models.denRoom({ half: ROOM_HALF, wallH: WALL_H, bed: BED });
+    addChild(root, den.room);
+    // The bedroll itself is the hub's, laid on the den's platform
+    addChild(den.bedNode, createNode({ position: { x: 0, y: 0.3, z: 0.02 }, geometry: hubModels.bedroll() }));
+    mark("den");
+    hud = hudMod.create({ roster: contributors.roster, catalog: models.SWAG, tierColors: models.TIER_COLORS, renderIcon: hudMod.renderIcon, lootEnabled });
+    hooks = {};
+    input = interactMod.create({ canvas: ctx.canvas, renderer, camera, hooks });
+    pilot = pilotMod.create({ renderer, canvas: ctx.canvas, camera, hud, presets: PRESETS, landing: "room", pitch: PITCH, dist: DIST, follow: FOLLOW, fly: FLY, clampTarget, clampCamera, coarse: COARSE });
+    const shared = { root, input, hooks, hud, game, world, renderer, camera, overlay: ctx.overlay, tickerAt: TICKER_AT, clampDrag, viewYaw: PRESETS.room.yaw };
+    fx = shared.fx = fxMod.create(shared);
+    pilot.bind(shared);
+    const donationRequest = donations.createRequest(game.state);
+    qr.drawTo(hud.el.qr, donationRequest.url, { quiet: 3, dark: "#000000", light: "#f3efe4" });
+    hud.setDonationUrl(donationRequest.url);
+    hud.setIdentity(game.state);
+    hud.onIdentityChange(({ handle, message }) => {
+      game.setIdentity({ handle: donations.sanitize(handle, donations.HANDLE_MAX), message: donations.sanitize(message, donations.MESSAGE_MAX) });
+      hud.setIdentity(game.state);
+    });
+    Object.assign(hooks, {
+      onHover: (hit, p) => {
+        if (hit) hud.tooltip.show(tooltipFor(hit), p.x, p.y);
+        else hud.tooltip.hide();
+      },
+      onHoverMove: (hit, p) => hud.tooltip.show(tooltipFor(hit), p.x, p.y),
+      onTap,
+      ...pilot.hooks
+    });
+    for (const item of den.interactive) {
+      input.add(item.node, { kind: item.kind, node: item.node, den: item }, { radius: item.radius });
+      propTargets.push(item.node);
+    }
+    hud.onPreset(pilot.goPreset);
+    hud.onAction((action) => {
+      if (action === "act") actKey();
+      else if (action === "leave") go("hub");
+      else if (action === "reset-view") pilot.goPreset("room");
+      else if (action === "tip") demoTip(1200);
+      else if (action === "tip-legendary") demoTip(120000);
+    });
+    sleeping = false;
+    zzzTimer = 0;
+    sleepyLine = 0;
+    nearBed = false;
+    hud.el.act.hidden = false;
+    hud.setAct("Sleep");
+    hud.setStats(game.state);
+    if (window.matchMedia("(max-width: 720px), (max-height: 500px)").matches) hud.el.sheet.dataset.open = "false";
+    hintTimer = window.setTimeout(() => hud.hint(COARSE ? "Drag to look · walk into the bed · tap Ooga! to sleep" : "Drag to orbit · WASD to move · Space by the bed sleeps"), 1200);
+    Object.assign(hodlScene, {
+      root, camera, input,
+      debug: {
+        den, bed: BED, spots: den.spots, props: den.interactive, lanterns: den.lanterns, camera, controls: pilot.controls,
+        sleep, wake, demoTip,
+        get sleeping() {
+          return sleeping;
+        },
+        get zzzTimer() {
+          return zzzTimer;
+        }
+      }
+    });
+  };
+  const leave = () => {
+    window.clearTimeout(hintTimer);
+    fx.dispose();
+    pilot.dispose();
+    for (const node of propTargets) input.remove(node);
+    propTargets.length = 0;
+    removeChild(root, den.room);
+    const targets = input.targetCount;
+    input.dispose();
+    hud.dispose();
+    // Drop the room and every system
+    den = hud = hooks = input = pilot = fx = null;
+    sleeping = false;
+    nearBed = false;
+    zzzTimer = 0;
+    hodlScene.input = hodlScene.debug = null;
+    return { targets };
+  };
+  const liveGeometry = (set) => {
+    // Every den geometry hangs on the room, so the director's walk of the new
+    // root already keeps it; nothing is held off the graph here.
+  };
+  const stats = () => {
+    let nodes = 0;
+    traverseVisible(root, () => nodes++);
+    const all = (n) => 1 + n.children.reduce((sum, c) => sum + all(c), 0);
+    return { visibleNodes: nodes, allNodes: all(root), tweens: tweenCount(), targets: input.targetCount, ...fx.stats() };
+  };
+  const hodlScene = {
+    id: "hodl", enter, update, overlay, onDonation, onKey, onLootCleared, renderOpts: RENDER_OPTS, leave, stats, liveGeometry,
+    root: null, camera: null, input: null, debug: null,
+    get inMotion() {
+      return !!fx && fx.inMotion;
+    }
+  };
+  BL.scenes = BL.scenes || {};
+  BL.scenes.hodl = hodlScene;
 })();
 
 // ---- js/race-track.js ----
@@ -20297,7 +20828,7 @@ void main() {
         return world.level;
       }
     };
-    for (const key of ["slots", "drops", "core", "shell", "delivery", "cavemen", "crates", "lab", "hud", "applyAllSwag", "renderLocker", "demoTip", "setPileLevel", "refreshStates", "trimPool", "shown", "island", "mouths", "labels", "camera", "cameraCave", "crew", "controls", "props", "altar", "path", "scenery", "jetpack", "mirrorCave", "matrixCave", "pilot", "renderOpts", "lamps", "entranceLights", "lighting", "fireSeats", "critters", "daylight", "setHour", "track", "racers", "items", "race", "audio", "weather", "launchers", "drop", "diver", "plane", "course"]) {
+    for (const key of ["slots", "drops", "core", "shell", "delivery", "cavemen", "crates", "lab", "hud", "applyAllSwag", "renderLocker", "demoTip", "setPileLevel", "refreshStates", "trimPool", "shown", "island", "mouths", "labels", "camera", "cameraCave", "crew", "controls", "props", "altar", "path", "scenery", "jetpack", "mirrorCave", "matrixCave", "pilot", "renderOpts", "lamps", "entranceLights", "lighting", "fireSeats", "critters", "daylight", "setHour", "track", "racers", "items", "race", "audio", "weather", "launchers", "drop", "diver", "plane", "course", "den", "bed", "spots", "lanterns", "sleep", "wake", "sleeping", "zzzTimer"]) {
       Object.defineProperty(ooga, key, { get: () => active.debug[key], enumerable: true });
     }
     window.__ooga = ooga;

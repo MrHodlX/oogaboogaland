@@ -917,6 +917,15 @@
       addProp("sign", sign, signX, signZ, 1);
       claim(roof.x, roof.z, 3.8);
       launchers.push(roof);
+    } else if (slot.status === "open" && slot.scene === "hodl") {
+      // Bedroom door: bedroll, crate stack with a night banana and a hanging lamp.
+      // No entrance torches/point lights — keeps the hub inside the 10-lamp budget.
+      addChild(group, createNode({ position: { x: 0, y: 0.05, z: -1.5 }, rotation: { x: 0, y: 0.4, z: 0 }, geometry: hubModels.bedroll(), depthBias: 0.3 }));
+      addChild(group, createNode({ position: { x: -1.75, y: 0, z: -1.05 }, rotation: { x: 0, y: 0.35, z: 0 }, geometry: hubModels.woodCrate() }));
+      addChild(group, createNode({ position: { x: -1.8, y: 0.88, z: -1.1 }, rotation: { x: 0, y: -0.25, z: 0 }, geometry: hubModels.woodCrate() }));
+      const bananaScale = models.BANANA_AMMO_SCALE;
+      addChild(group, createNode({ position: { x: -1.8, y: 1.84, z: -1.1 }, rotation: { x: 0, y: 0.6, z: 0 }, scale: { x: bananaScale, y: bananaScale, z: bananaScale }, geometry: models.bananaGeometry() }));
+      addChild(group, createNode({ position: { x: 0.35, y: 2.5, z: -1.25 }, geometry: hubModels.lantern(), matrixEmissiveLiving: true, glow: 0.85, flare: 0 }));
     } else if (slot.status === "open") {
       for (const x of [-1.3, 1.3]) addChild(group, createNode({ position: { x, y: 0, z: -3.5 }, geometry: hubModels.caveShelves() }));
     } else if (slot.status === "mirror") {
@@ -930,22 +939,26 @@
       sleepers.push({ x: m.x + ax * 0.8, y: 4.4, z: m.z + az * 0.8, timer: sleepers.length * 0.7 });
     }
     if (slot.status === "open" || slot.status === "mirror") {
-      const torchGeometry = hubModels.torch();
-      const torchZ = rim.position.z + rim.geometry.frontZ - torchGeometry.backZ + CAVE_TORCH_GAP;
-      for (let i = 0; i < 2; i++) {
-        const side = i ? "right" : "left", localX = (i ? 1 : -1) * rim.geometry.jambCenterX;
-        const torch = createNode({ position: { x: localX, y: 0, z: torchZ }, geometry: torchGeometry, flare: 0, matrixEmissiveLiving: true });
-        addChild(group, torch);
-        const tx = m.x + ax * torchZ + Math.cos(m.ry) * localX;
-        const ty = m.floorY + torchGeometry.flameY;
-        const tz = m.z + az * torchZ - Math.sin(m.ry) * localX;
-        const id = `${slot.id}:torch:${side}`;
-        const lamp = addLamp(torch, LAMP.torch, tx, ty, tz, true, i, id);
-        const debug = { id, caveId: slot.id, kind: "torch", side, localPosition: [localX, torchGeometry.flameY, torchZ], worldPosition: [tx, ty, tz], registered: true, factor: 0, lit: false, selected: false, approximated: false, rimFront: rim.position.z + rim.geometry.frontZ, fixtureBack: torchZ + torchGeometry.backZ, gap: CAVE_TORCH_GAP };
-        lamp.debug = debug;
-        entranceLights.push(debug);
-        claim(tx, tz, 0.5);
-        addProp("torch", torch, tx, tz, 0.7);
+      // Hodl keeps the sign but skips the torch pair and sign-lantern so the hub
+      // stays inside the fixed ten point-light budget used by the other caves.
+      if (slot.scene !== "hodl") {
+        const torchGeometry = hubModels.torch();
+        const torchZ = rim.position.z + rim.geometry.frontZ - torchGeometry.backZ + CAVE_TORCH_GAP;
+        for (let i = 0; i < 2; i++) {
+          const side = i ? "right" : "left", localX = (i ? 1 : -1) * rim.geometry.jambCenterX;
+          const torch = createNode({ position: { x: localX, y: 0, z: torchZ }, geometry: torchGeometry, flare: 0, matrixEmissiveLiving: true });
+          addChild(group, torch);
+          const tx = m.x + ax * torchZ + Math.cos(m.ry) * localX;
+          const ty = m.floorY + torchGeometry.flameY;
+          const tz = m.z + az * torchZ - Math.sin(m.ry) * localX;
+          const id = `${slot.id}:torch:${side}`;
+          const lamp = addLamp(torch, LAMP.torch, tx, ty, tz, true, i, id);
+          const debug = { id, caveId: slot.id, kind: "torch", side, localPosition: [localX, torchGeometry.flameY, torchZ], worldPosition: [tx, ty, tz], registered: true, factor: 0, lit: false, selected: false, approximated: false, rimFront: rim.position.z + rim.geometry.frontZ, fixtureBack: torchZ + torchGeometry.backZ, gap: CAVE_TORCH_GAP };
+          lamp.debug = debug;
+          entranceLights.push(debug);
+          claim(tx, tz, 0.5);
+          addProp("torch", torch, tx, tz, 0.7);
+        }
       }
       const sign = createNode({ position: { x: 0, y: 4.5, z: 0.52 }, geometry: hubModels.caveSign(slot.name), matrixEmissiveLiving: true });
       addChild(group, sign);
@@ -962,18 +975,20 @@
         ]
       });
       if (mirrorCave && mirrorCave.slot === slot) mirrorCave.sign = sign;
-      // A lantern hangs off the sign bracket and matches the entrance torches' dusk fade.
-      const lantern = createNode({ position: { x: halfW + 0.1, y: sign.position.y + halfH + 0.14, z: 0.52 }, geometry: hubModels.lantern() });
-      addChild(group, lantern);
-      const lx = lantern.position.x, ly = lantern.position.y - 0.27, lz = lantern.position.z;
-      const wx = m.x + Math.cos(m.ry) * lx + ax * lz;
-      const wy = m.floorY + ly;
-      const wz = m.z - Math.sin(m.ry) * lx + az * lz;
-      const id = `${slot.id}:lantern:right`;
-      const lamp = addLamp(lantern, LAMP.lantern, wx, wy, wz, true, 2, id);
-      const debug = { id, caveId: slot.id, kind: "lantern", side: "right", localPosition: [lx, ly, lz], worldPosition: [wx, wy, wz], registered: true, factor: 0, lit: false, selected: false, approximated: false, rimFront: null, fixtureBack: null, gap: null };
-      lamp.debug = debug;
-      entranceLights.push(debug);
+      if (slot.scene !== "hodl") {
+        // A lantern hangs off the sign bracket and matches the entrance torches' dusk fade.
+        const lantern = createNode({ position: { x: halfW + 0.1, y: sign.position.y + halfH + 0.14, z: 0.52 }, geometry: hubModels.lantern() });
+        addChild(group, lantern);
+        const lx = lantern.position.x, ly = lantern.position.y - 0.27, lz = lantern.position.z;
+        const wx = m.x + Math.cos(m.ry) * lx + ax * lz;
+        const wy = m.floorY + ly;
+        const wz = m.z - Math.sin(m.ry) * lx + az * lz;
+        const id = `${slot.id}:lantern:right`;
+        const lamp = addLamp(lantern, LAMP.lantern, wx, wy, wz, true, 2, id);
+        const debug = { id, caveId: slot.id, kind: "lantern", side: "right", localPosition: [lx, ly, lz], worldPosition: [wx, wy, wz], registered: true, factor: 0, lit: false, selected: false, approximated: false, rimFront: null, fixtureBack: null, gap: null };
+        lamp.debug = debug;
+        entranceLights.push(debug);
+      }
     }
     if (VINES.includes(slot.id)) for (const x of [-1.1, 1.1]) addChild(group, createNode({ position: { x, y: 3.45, z: 0.95 }, geometry: hubModels.vine() }));
     addChild(root, group);
@@ -1362,7 +1377,7 @@
       case "crate":
         return `${o.crate.loot.tier} crate · tap to open`;
       case "cave":
-        return o.slot.status === "open" ? `${o.slot.name} · tap to enter` : o.slot.status === "mirror" ? `${o.slot.name} · mirror` : o.slot.status === "sleeping" ? "A project sleeps here · zzz" : "An empty cave";
+        return o.slot.status === "open" ? (o.slot.scene === "hodl" ? `${o.slot.name} · tap to rest` : `${o.slot.name} · tap to enter`) : o.slot.status === "mirror" ? `${o.slot.name} · mirror` : o.slot.status === "sleeping" ? "A project sleeps here · zzz" : "An empty cave";
       case "gate":
         return `${caves.gate.name} · leads nowhere yet`;
       case "prop":
