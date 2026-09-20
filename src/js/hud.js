@@ -4,7 +4,7 @@
   const { canvasRenderer } = BL;
   const { formatLarge } = BL.game;
   const { createNode, addChild, createCamera, boundsOf } = BL.scene;
-  const STATE_LABELS = { working: "clankin", chilling: "chillin", sleeping: "sleepin", away: "chillin", online: "online" };
+  const STATE_LABELS = { working: "clank", chilling: "chill", sleeping: "sleep", away: "chill", online: "online" };
   // Tooltip dots retain their human-presence color without changing NPC activity.
   const statusFor = (cave) => cave.humanControlled ? "online" : cave.state === "away" ? "chilling" : cave.state;
   const $ = (id) => document.getElementById(id);
@@ -73,6 +73,54 @@
     iconRenderer.dispose();
     return canvas;
   };
+  // Draw the carried item's actual geometry, including likenesses and skins.
+  // This owns only temporary icon nodes; the character's item is never reparented.
+  const renderPrimaryIcon = (canvas, geometry) => {
+    const renderer = canvasRenderer.createRenderer(canvas, { width: ICON_PX, height: ICON_PX, transparent: true });
+    const root = createNode(), pivot = createNode(), item = createNode({ geometry });
+    const bounds = boundsOf(geometry), fit = 0.67 / Math.max(bounds.radius, 0.05);
+    item.scale.x = item.scale.y = item.scale.z = fit;
+    item.position.x = -bounds.center[0] * fit;
+    item.position.y = -bounds.center[1] * fit;
+    item.position.z = -bounds.center[2] * fit;
+    pivot.rotation.z = 0.55;
+    addChild(root, pivot); addChild(pivot, item);
+    const camera = createCamera({ fov: 32, near: 0.1, far: 20 });
+    camera.position.x = 0.8; camera.position.y = 0.45; camera.position.z = 2.7;
+    camera.target.x = camera.target.y = camera.target.z = 0;
+    renderer.render(root, camera);
+    renderer.dispose();
+  };
+  const copyPortraitNode = (source, portraitRoot, portraitGeometry) => {
+    if (source.portraitHidden) return null;
+    const copy = createNode({ geometry: source === portraitRoot ? portraitGeometry : source.geometry });
+    Object.assign(copy.position, source.position);
+    Object.assign(copy.rotation, source.rotation);
+    Object.assign(copy.scale, source.scale);
+    copy.visible = source.visible;
+    for (const child of source.children) if (child.visible && !child.portraitHidden) addChild(copy, copyPortraitNode(child, portraitRoot, portraitGeometry));
+    return copy;
+  };
+  const renderFaceIcon = (canvas, cave) => {
+    const renderer = canvasRenderer.createRenderer(canvas, { width: ICON_PX, height: ICON_PX, transparent: true });
+    const root = createNode(), head = copyPortraitNode(cave.parts.head, cave.parts.head, cave.portraitHead);
+    const bounds = boundsOf(cave.portraitHead), fit = (cave.traits.gasMask ? 0.68 : 0.78) / Math.max(bounds.radius, 0.05);
+    head.position.x = head.position.y = head.position.z = 0;
+    head.rotation.x = head.rotation.y = head.rotation.z = 0;
+    head.scale.x = head.scale.y = head.scale.z = fit;
+    head.position.x = -bounds.center[0] * fit;
+    head.position.y = -bounds.center[1] * fit;
+    head.position.z = -bounds.center[2] * fit;
+    addChild(root, head);
+    const camera = createCamera({ fov: 28, near: 0.1, far: 20 });
+    // Caveman faces are built on +Z. Keep the portrait square to that plane so
+    // the mode button reads as a face instead of another angled item icon.
+    camera.position.x = camera.position.y = 0;
+    camera.position.z = 2.7;
+    camera.target.x = camera.target.y = camera.target.z = 0;
+    renderer.render(root, camera);
+    renderer.dispose();
+  };
   const create = ({ roster, catalog, tierColors, renderIcon, lootEnabled = false }) => {
     const el = {
       meterFill: $("meter-fill"),
@@ -90,6 +138,18 @@
       subtitle: $("subtitle"),
       actions: [...document.querySelectorAll("[data-action]")],
       act: $("act"),
+      mode: $("mode-hud"),
+      modeFree: $("freeroam-icon"),
+      modeFace: $("mode-face-icon"),
+      modeHealth: $("mode-health"),
+      modeHealthFill: $("mode-health-fill"),
+      modeDestinations: $("detached-destinations"),
+      modeDestinationName: $("detached-destination-name"),
+      modeDestinationDots: [...document.querySelectorAll("[data-detached-preset]")],
+      primary: $("primary-hud"),
+      primaryIcon: $("primary-icon"),
+      primaryStrength: $("primary-strength"),
+      primaryStrengthFill: $("primary-strength-fill"),
       weapon: $("weapon-hud"),
       weaponToggle: $("weapon-hud"),
       weaponReadout: $("weapon-readout"),
@@ -109,10 +169,15 @@
       jetpackFuel: $("jetpack-fuel"),
       jetpackFuelFill: $("jetpack-fuel-fill"),
       jetpackFuelValue: $("jetpack-fuel-value"),
-      jetpackCompact: $("jetpack-fuel-compact"),
+      jetpackCompact: document.querySelector(".jetpack-compact"),
+      jetpackCompactFuel: $("jetpack-fuel-compact"),
+      jetpackCompactFill: $("jetpack-fuel-compact-fill"),
       messageStack: $("message-stack"),
       toast: $("toast"),
       tooltip: $("tooltip"),
+      tooltipText: $("tooltip-text"),
+      tooltipHealth: $("tooltip-health"),
+      tooltipHealthFill: $("tooltip-health-fill"),
       hint: $("hint"),
       sheet: $("sheet"),
       sheetToggle: $("sheet-toggle"),
@@ -131,6 +196,8 @@
     el.lootTab.hidden = !lootEnabled;
     el.crateHelp.hidden = !lootEnabled;
     el.worldLootHint.hidden = !lootEnabled;
+    el.primary.hidden = true;
+    el.mode.hidden = true;
     el.weapon.hidden = true;
     el.magazine.hidden = true;
     el.jetpack.hidden = true;
@@ -226,6 +293,99 @@
       actLabel = label;
       el.act.textContent = label;
     };
+    let actionHandler = null;
+    const DETACHED_PRESETS = ["pile", "lab", "mirror", "underground", "basement"];
+    const DETACHED_NAMES = { pile: "Pile", lab: "Lab", mirror: "Mirror", underground: "HQ", basement: "Basement" };
+    let detachedPreset = "pile", detachedNameTimer = 0;
+    const setDetachedView = (name, announce = false) => {
+      if (!DETACHED_NAMES[name]) return;
+      detachedPreset = name;
+      for (const dot of el.modeDestinationDots) dot.dataset.current = String(dot.dataset.detachedPreset === name);
+      if (!announce) return;
+      window.clearTimeout(detachedNameTimer);
+      el.modeDestinationName.textContent = DETACHED_NAMES[name];
+      el.modeDestinationName.classList.remove("show");
+      void el.modeDestinationName.offsetWidth;
+      el.modeDestinationName.classList.add("show");
+      detachedNameTimer = window.setTimeout(() => el.modeDestinationName.classList.remove("show"), 1200);
+    };
+    const nextDetachedView = () => DETACHED_PRESETS[(DETACHED_PRESETS.indexOf(detachedPreset) + 1) % DETACHED_PRESETS.length];
+    let modeName = "", modeGeometry = null, modeSelected = false, modeBattle = false, modeView = "detached", modeHealth = -1;
+    const setMode = (cave, battle = false, view = cave ? "orbit" : "detached", visible = true) => {
+      const selected = !!cave, name = selected ? cave.traits.name : "";
+      const identityChanged = selected !== modeSelected || selected && name !== modeName;
+      const stateChanged = battle !== modeBattle || view !== modeView;
+      if (el.mode.hidden === visible) el.mode.hidden = !visible;
+      if (selected && (name !== modeName || cave.parts.head.geometry !== modeGeometry)) {
+        renderFaceIcon(el.modeFace, cave);
+        el.mode.dataset.portrait = "face-crop";
+        modeName = name;
+        modeGeometry = cave.parts.head.geometry;
+      }
+      if (selected !== modeSelected) {
+        modeSelected = selected;
+        el.mode.dataset.selected = String(selected);
+      }
+      if (el.modeFree.hidden !== selected) el.modeFree.hidden = selected;
+      if (el.modeFace.hidden === selected) el.modeFace.hidden = !selected;
+      if (el.modeHealth.hidden === selected) el.modeHealth.hidden = !selected;
+      const health = selected && cave.health ? Math.max(0, Math.min(25, cave.health.value)) : 25;
+      if (health !== modeHealth) {
+        modeHealth = health;
+        el.modeHealthFill.style.transform = `scaleY(${health / 25})`;
+        el.modeHealth.setAttribute("aria-valuenow", String(Math.ceil(health)));
+      }
+      if (stateChanged) { modeBattle = battle; modeView = view; }
+      if (identityChanged || stateChanged) {
+        el.mode.dataset.shooter = String(selected && battle);
+        el.mode.dataset.battle = String(selected && battle);
+        el.mode.dataset.view = selected ? view : "detached";
+        el.mode.setAttribute("aria-pressed", String(selected && battle));
+        el.mode.setAttribute("aria-label", selected
+          ? `${name}; ${view} view; ${battle ? "battle" : "carry"} mode. Press to switch battle or carry mode; hold to detach`
+          : `${DETACHED_NAMES[detachedPreset]} detached view. Press to cycle destinations`);
+        el.mode.title = selected ? `${name} · ${view} · ${battle ? "battle" : "carry"} · hold to detach` : `${DETACHED_NAMES[detachedPreset]} · detached`;
+      }
+    };
+    setDetachedView(detachedPreset);
+    let primaryShown = false, primarySelected = false, primaryAiming = false, primaryHeld = false, primaryPower = 50;
+    let primaryGeometry = null, primaryPointer = -1, primaryKey = "";
+    const finishPrimary = (cancel) => {
+      if (primaryPointer < 0 && !primaryKey) return;
+      const pointer = primaryPointer;
+      primaryPointer = -1; primaryKey = "";
+      if (pointer >= 0 && el.primary.hasPointerCapture(pointer)) el.primary.releasePointerCapture(pointer);
+      if (actionHandler) actionHandler(cancel ? "weapon-primary-cancel" : "weapon-primary-up");
+    };
+    const setPrimary = (available, selected, geometry, charge = 0, held = false, power = 0.5, aiming = false) => {
+      if (!available || !selected && primarySelected || geometry !== primaryGeometry) finishPrimary(true);
+      if (available !== primaryShown) {
+        primaryShown = available;
+        el.primary.hidden = !available;
+      }
+      if (available && geometry !== primaryGeometry) {
+        renderPrimaryIcon(el.primaryIcon, geometry);
+        primaryGeometry = geometry;
+      }
+      if (selected !== primarySelected || aiming !== primaryAiming) {
+        primarySelected = selected; primaryAiming = aiming;
+        el.primary.dataset.equipped = String(selected);
+        el.primary.setAttribute("aria-pressed", String(selected));
+        el.primary.title = !selected ? "Equip primary melee weapon (1)" : aiming ? "Primary melee weapon selected (1)" : "Tap to poke; hold to charge a swing (1)";
+        el.primary.setAttribute("aria-label", !selected ? "Equip primary melee weapon" : aiming ? "Primary melee weapon selected" : "Tap primary melee weapon to poke; hold to charge a swing");
+      }
+      if (held !== primaryHeld) {
+        primaryHeld = held;
+        el.primary.dataset.charging = String(held);
+      }
+      const strength = Math.round(Math.max(0.5, Math.min(2, power)) * 100);
+      if (strength !== primaryPower) {
+        primaryPower = strength;
+        el.primaryStrengthFill.style.transform = `scaleY(${strength / 200})`;
+        el.primaryStrength.setAttribute("aria-valuenow", String(strength));
+        el.primaryStrength.setAttribute("aria-valuetext", `${strength}% of normal swing damage`);
+      }
+    };
     let weaponShown = false, weaponEquipped = false, weaponAmmo = -1, weaponDisplayAmmo = -1, weaponReloading = false, weaponCanReload = false, weaponUnlimited = false;
     let magazineCount = 0, magazineHigh = -1, magazineLow = -1, magazineCanSwap = false;
     let magazineHighReloading = false, magazineLowReloading = false;
@@ -244,7 +404,7 @@
       const labelAmmo = weaponEquipped ? weaponDisplayAmmo : total;
       if (labelAmmo !== weaponLabelAmmo || weaponEquipped !== weaponLabelEquipped) {
         weaponLabelAmmo = labelAmmo; weaponLabelEquipped = weaponEquipped;
-        el.weaponToggle.setAttribute("aria-label", weaponUnlimited ? `${weaponEquipped ? "Stow" : "Equip"} AK-47; unlimited ammunition` : weaponEquipped ? `Stow AK-47; ammo ${labelAmmo} of 30 rounds` : `Equip AK-47; ${total} rounds total`);
+        el.weaponToggle.setAttribute("aria-label", weaponUnlimited ? `${weaponEquipped ? "Fire" : "Equip"} AK-47; unlimited ammunition` : weaponEquipped ? `Fire AK-47; ammo ${labelAmmo} of 30 rounds` : `Equip AK-47; ${total} rounds total`);
       }
     };
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -301,7 +461,7 @@
         el.weapon.dataset.equipped = String(equipped);
         el.weaponToggle.setAttribute("aria-pressed", String(equipped));
         el.weaponToggle.setAttribute("aria-expanded", String(equipped));
-        el.weaponToggle.title = equipped ? "Stow AK-47 (G)" : "Equip AK-47 (G)";
+        el.weaponToggle.title = equipped ? "Fire AK-47" : "Equip AK-47 (2)";
         el.weaponReadout.setAttribute("aria-hidden", String(!equipped));
       }
       if (modeChanged || reloading !== weaponReloading || canReload !== weaponCanReload) {
@@ -391,15 +551,16 @@
       if (percent === jetpackPercent) return;
       jetpackPercent = percent;
       el.jetpackFuelFill.style.transform = `scaleX(${percent / 100})`;
+      el.jetpackCompactFill.style.transform = `scaleY(${percent / 100})`;
       el.jetpackFuel.setAttribute("aria-valuenow", String(percent));
       el.jetpackFuel.dataset.level = percent <= 20 ? "low" : "ok";
+      el.jetpackCompactFuel.setAttribute("aria-valuenow", String(percent));
+      el.jetpackCompactFuel.dataset.level = percent <= 20 ? "low" : "ok";
       el.jetpackFuelValue.firstChild.data = `${percent}%`;
-      el.jetpackCompact.firstChild.data = `${percent}%`;
     };
     const setSubtitle = (text) => {
       el.subtitle.textContent = text;
     };
-    let actionHandler = null;
     const onAction = (fn) => {
       actionHandler = fn;
     };
@@ -415,10 +576,96 @@
       e.preventDefault();
       closeFeed();
     });
-    for (const b of el.actions) on(b, "click", () => {
+    const primaryPointerEvent = (e) => {
+      if (e.button !== 0) return;
+      // Pressing or releasing one mouse button while another stays held is a
+      // pointermove, both natively and through the virtual carry cursor.
+      const down = e.type === "pointerdown" || e.type === "pointermove" && (e.buttons & 1);
+      if (down) {
+        if (primaryPointer >= 0 || primaryKey || el.primary.hidden) return;
+        e.preventDefault(); e.stopPropagation();
+        primaryPointer = e.pointerId;
+        // The locked carry cursor already captures its synthetic pointer target.
+        if (e.isTrusted && !document.pointerLockElement) el.primary.setPointerCapture(e.pointerId);
+        if (actionHandler) actionHandler("weapon-primary-down");
+      } else if (e.pointerId === primaryPointer) {
+        e.preventDefault(); e.stopPropagation();
+        finishPrimary(false);
+        el.primary.blur();
+      }
+    };
+    on(el.primary, "pointerdown", primaryPointerEvent);
+    on(el.primary, "pointerup", primaryPointerEvent);
+    on(el.primary, "pointermove", primaryPointerEvent);
+    on(el.primary, "pointercancel", (e) => { if (e.pointerId === primaryPointer) finishPrimary(true); });
+    on(el.primary, "lostpointercapture", (e) => { if (e.pointerId === primaryPointer) finishPrimary(true); });
+    on(el.primary, "keydown", (e) => {
+      if (e.code !== "Space" && e.code !== "Enter") return;
+      e.preventDefault(); e.stopPropagation();
+      if (e.repeat || primaryKey || primaryPointer >= 0 || el.primary.hidden) return;
+      primaryKey = e.code;
+      if (actionHandler) actionHandler("weapon-primary-down");
+    });
+    on(el.primary, "keyup", (e) => {
+      if (e.code !== primaryKey) return;
+      e.preventDefault(); e.stopPropagation();
+      finishPrimary(false);
+    });
+    on(el.primary, "blur", () => finishPrimary(true));
+    on(window, "blur", () => finishPrimary(true));
+    on(document, "visibilitychange", () => { if (document.hidden) finishPrimary(true); });
+    on(el.primary, "contextmenu", (e) => e.preventDefault());
+    const MODE_HOLD_MS = 650;
+    let modePointer = -1, modeHoldTimer = 0, modeLong = false, modePressPreset = "";
+    const clearModeHold = () => {
+      window.clearTimeout(modeHoldTimer);
+      modeHoldTimer = 0;
+      el.mode.dataset.holding = "false";
+    };
+    on(el.mode, "pointerdown", (e) => {
+      if (e.button !== 0 || modePointer >= 0) return;
+      e.preventDefault(); e.stopPropagation();
+      modePointer = e.pointerId;
+      modeLong = false;
+      modePressPreset = !modeSelected && e.target.closest ? e.target.closest("[data-detached-preset]")?.dataset.detachedPreset || "" : "";
+      el.mode.dataset.holding = String(modeSelected);
+      if (e.isTrusted) el.mode.setPointerCapture(e.pointerId);
+      if (modeSelected) {
+        modeHoldTimer = window.setTimeout(() => {
+          modeHoldTimer = 0;
+          modeLong = true;
+          el.mode.dataset.holding = "false";
+          if (actionHandler) actionHandler("mode-release");
+        }, MODE_HOLD_MS);
+      }
+    });
+    const finishModePress = (e, cancel = false) => {
+      if (e.pointerId !== modePointer) return;
+      e.preventDefault(); e.stopPropagation();
+      modePointer = -1;
+      if (el.mode.hasPointerCapture(e.pointerId)) el.mode.releasePointerCapture(e.pointerId);
+      clearModeHold();
+      if (!cancel && !modeLong && actionHandler) {
+        if (modeSelected) actionHandler("mode-toggle");
+        else actionHandler("mode-preset", modePressPreset || nextDetachedView());
+      }
+      modePressPreset = "";
+      modeLong = false;
+      el.mode.blur();
+    };
+    on(el.mode, "pointerup", (e) => finishModePress(e));
+    on(el.mode, "pointercancel", (e) => finishModePress(e, true));
+    on(el.mode, "lostpointercapture", (e) => { if (e.pointerId === modePointer) finishModePress(e, true); });
+    on(el.mode, "contextmenu", (e) => e.preventDefault());
+    for (const b of el.actions) on(b, "click", (e) => {
+      // Native and virtual pointer clicks already completed their press/release.
+      // A detail-zero click is an assistive or programmatic tap without a hold.
+      if (b === el.primary && (e.detail !== 0 || primaryPointer >= 0 || primaryKey)) return;
+      if (b === el.mode && e.detail !== 0) return;
       b.blur();
       if (b.dataset.action === "feed") openFeed();
       else if (b.dataset.action === "feed-close") closeFeed();
+      else if (b === el.mode && !modeSelected) actionHandler && actionHandler("mode-preset", nextDetachedView());
       else actionHandler && actionHandler(b.dataset.action);
     });
     const toast = (text) => {
@@ -435,7 +682,7 @@
         }, MESSAGE_FADE_MS);
       }, 2800);
     };
-    let tipText = "", tipState = "", tipW = 0, tipH = 0, tipCave = null, tipName = false, tipLeft = NaN, tipTop = NaN;
+    let tipText = "", tipState = "", tipHealth = -1, tipW = 0, tipH = 0, tipCave = null, tipName = false, tipLeft = NaN, tipTop = NaN;
     let tipVisibility = null, tipSpeechTop = Infinity;
     const tipScreen = { x: 0, y: 0, depth: 0 };
     const placeTooltip = (left, top) => {
@@ -452,8 +699,10 @@
         if (name !== tipName) {
           tipName = name;
           el.tooltip.classList.toggle("tooltip--name", name);
+          el.tooltipHealth.hidden = !name;
           if (!name) {
             tipState = "";
+            tipHealth = -1;
             delete el.tooltip.dataset.state;
             el.tooltip.removeAttribute("aria-label");
           }
@@ -462,7 +711,7 @@
         if (changed) {
           tipText = text;
           tipState = "";
-          el.tooltip.textContent = text;
+          el.tooltipText.textContent = text;
           tipW = el.tooltip.offsetWidth;
           tipH = el.tooltip.offsetHeight;
         }
@@ -486,10 +735,18 @@
       update: (place = true) => {
         if (!tipCave) return;
         const state = statusFor(tipCave);
-        if (state !== tipState) {
+        const health = tipCave.health ? Math.max(0, Math.min(25, tipCave.health.value)) : 25;
+        const shownHealth = Math.ceil(health);
+        const healthChanged = health !== tipHealth;
+        if (healthChanged) {
+          tipHealth = health;
+          el.tooltipHealthFill.style.transform = `scaleX(${health / 25})`;
+          el.tooltipHealth.setAttribute("aria-valuenow", String(shownHealth));
+        }
+        if (state !== tipState || healthChanged) {
           tipState = state;
           el.tooltip.dataset.state = state;
-          el.tooltip.setAttribute("aria-label", `${tipText}, ${STATE_LABELS[state]}`);
+          el.tooltip.setAttribute("aria-label", `${tipText}, ${STATE_LABELS[state]}, ${shownHealth} of 25 health`);
         }
         el.tooltip.hidden = !tipVisibility.anchor(tipCave, tipScreen);
         if (el.tooltip.hidden || !place) return;
@@ -506,15 +763,18 @@
         tipSpeechTop = Infinity;
         el.tooltip.hidden = true;
         el.tooltip.classList.remove("tooltip--name");
+        el.tooltipHealth.hidden = true;
         delete el.tooltip.dataset.state;
         el.tooltip.removeAttribute("aria-label");
         tipName = false;
         tipText = tipState = "";
+        tipHealth = -1;
       }
     };
     const hint = (text, ms = 4200) => {
       window.clearTimeout(hintTimer);
       window.clearTimeout(hintHideTimer);
+      window.clearTimeout(detachedNameTimer);
       el.hint.textContent = text;
       el.hint.hidden = false;
       el.messageStack.append(el.hint);
@@ -690,6 +950,7 @@
     };
     // Remove the rows and timers this instance added
     const dispose = () => {
+      finishPrimary(true);
       window.clearTimeout(toastTimer);
       window.clearTimeout(toastHideTimer);
       window.clearTimeout(hintTimer);
@@ -702,12 +963,18 @@
       el.hint.classList.remove("show");
       el.hint.hidden = true;
       tooltip.hide();
+      clearModeHold();
+      modePointer = -1;
+      setMode(null, false, "detached", false);
+      setPrimary(false, false, null);
+      primaryGeometry = null;
+      el.primaryIcon.width = ICON_PX;
       setWeapon(false, false, 0);
       setMagazine(0, 0, 0, false);
       setJetpack(false, false, 0);
       closeFeed();
     };
-    return { el, openFeed, closeFeed, setRosterRow, setMeter, setStats, setAct, setWeapon, setMagazine, setJetpack, setSubtitle, onAction, toast, tooltip, hint, selectTab, onPreset, onIdentityChange, setIdentity, setDonationUrl, onAssign, onUnassign, renderInventory, dispose };
+    return { el, openFeed, closeFeed, setRosterRow, setMeter, setStats, setAct, setMode, setDetachedView, setPrimary, setWeapon, setMagazine, setJetpack, setSubtitle, onAction, toast, tooltip, hint, selectTab, onPreset, onIdentityChange, setIdentity, setDonationUrl, onAssign, onUnassign, renderInventory, dispose };
   };
   BL.hud = { create, renderIcon, signLettering, STATE_LABELS, statusFor };
 })();

@@ -283,7 +283,10 @@
     location.reload();
   };
   const onKey = (e) => {
-    if (e.key === "0") return;
+    if (e.key === "0") {
+      if (!e.repeat) pilot.modeAction("mode-toggle");
+      return;
+    }
     if ((e.key === "1" || e.key === "2") && pilot.weaponMode(Number(e.key))) return;
     if (e.key === "Escape") {
       if (pilot.player) pilot.release();
@@ -322,6 +325,9 @@
     input = interactMod.create({ canvas: ctx.canvas, renderer, camera, hooks });
     pilot = pilotMod.create({ renderer, canvas: ctx.canvas, camera, hud, presets: PRESETS, landing: "pile", pitch: PITCH, dist: DIST, follow: FOLLOW, fly: FLY, clampTarget, clampCamera, ceilingAt: () => 4.3, coarse: COARSE, close: { eyeHeight: 1.1, eyeRatio: 0.95, eyeForward: 0.16, pitch: [-1.35, 1.35], trailingDist: 4, orbitDist: 5, maxStep: 0.6, groundAt: () => 0 } });
     const shared = { root, input, hooks, hud, game, world, renderer, camera, overlay: ctx.overlay, tickerAt: TICKER_AT, buildSpots: BUILD_SPOTS.slice(), walkIn: WALK_IN, clampDrag, viewYaw: PRESETS.pile.yaw, bedrolls: lab.bedrolls, pileScale: 0.45, onShown: (shown) => { lab.equipment.abacus.setValue(shown); meterTimer = 0; }, walkable };
+    shared.onWeaponImpact = (source, hit, dx, dy, dz, power) => {
+      if (hit.owner.kind === "caveman") crew.damage(hit.owner.cave, power);
+    };
     shared.fireReachable = (x, y, z, toX, toY, toZ) => Math.abs(toX) < ROOM_HALF && Math.abs(toZ) < ROOM_HALF && toY > 0 && toY < 4.5;
     fx = shared.fx = fxMod.create(shared);
     pile = shared.pile = pileMod.create(shared);
@@ -393,12 +399,14 @@
       addProp(eq.abacus.node.children[0], { kind: "abacus", node: eq.abacus.node.children[0] });
     }
     hud.onPreset(pilot.goPreset);
-    hud.onAction((action) => {
+    hud.onAction((action, value) => {
       if (action === "tip") demoTip(1200);
       else if (action === "tip-legendary") demoTip(120000);
       else if (action === "clear-loot") clearLoot();
       else if (action === "reset") resetDemo();
       else if (action === "act") pilot.action();
+      else if (action === "mode-preset") pilot.goPreset(value === "pile" ? "pile" : value === "lab" ? "racks" : value === "mirror" ? "bunks" : "bench");
+      else if (action.startsWith("mode-")) pilot.modeAction(action);
       else if (action.startsWith("weapon-") || action === "magazine-swap") pilot.weaponAction(action);
       else if (action === "reset-view") pilot.goPreset("pile");
       else if (action === "leave") go("hub");
@@ -413,7 +421,7 @@
         : contributors.activeRoster.find(entry => crew.stateOf(crew.cavemen.get(entry.name)) === "working") || contributors.activeRoster[0];
       const cave = contributor && crew.cavemen.get(contributor.name);
       if (cave) {
-        if (crew.stateOf(cave) !== "working") { cave.override = "working"; crew.refreshStates(true); }
+        if (!contributors.debugState && crew.stateOf(cave) !== "working") { cave.override = "working"; crew.refreshStates(true); }
         pilot.possess(cave);
         crew.configureWeapon(cave, preloadedWeapon, preloadedAmmo);
       }
@@ -442,7 +450,7 @@
         get shown() {
           return pile.shown;
         },
-        camera, crew, pilot, controls: pilot.controls
+        camera, crew, fx, pilot, controls: pilot.controls
       }
     });
     pilot.update(0);

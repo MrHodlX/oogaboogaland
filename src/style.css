@@ -88,7 +88,8 @@ select {
   user-select: none;
 }
 
-.carry-cursor-active #scene {
+.carry-cursor-active #scene,
+.aim-cursor-focused #scene {
   cursor: none !important;
 }
 
@@ -1101,7 +1102,8 @@ select {
 }
 
 .tooltip--name {
-  display: flex;
+  display: grid;
+  grid-template-columns: 8px auto;
   align-items: center;
   gap: 6px;
   padding: 3px 5px;
@@ -1125,6 +1127,25 @@ select {
   border-radius: 50%;
   background: var(--muted);
   box-shadow: 0 0 0 1px #171714, 0 1px 3px #000;
+}
+
+.tooltip-health {
+  grid-column: 1 / -1;
+  width: 72px;
+  height: 4px;
+  margin: -2px auto 1px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgba(25, 20, 15, 0.78);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.8);
+}
+
+.tooltip-health > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left center;
 }
 
 .tooltip--name[data-state="working"]::before {
@@ -1162,6 +1183,8 @@ select {
   display: none;
 }
 
+.mode-hud,
+.primary-hud,
 .weapon-hud,
 .magazine-hud,
 .jetpack-hud {
@@ -1184,6 +1207,12 @@ select {
   transition: width 0.2s ease, background 0.15s ease, transform 0.15s ease;
 }
 
+.mode-hud:hover,
+.mode-hud.virtual-hover,
+.mode-hud:focus-visible,
+.primary-hud:hover,
+.primary-hud.virtual-hover,
+.primary-hud:focus-visible,
 .weapon-hud:hover,
 .weapon-hud.virtual-hover,
 .weapon-hud:focus-visible,
@@ -1197,12 +1226,16 @@ select {
   outline: none;
 }
 
+.mode-hud:active,
+.primary-hud:active,
 .weapon-hud:active,
 .magazine-hud:active:not(:disabled),
 .jetpack-hud:active:not(:disabled) {
   transform: translateY(1px);
 }
 
+.mode-hud:focus-visible,
+.primary-hud:focus-visible,
 .weapon-hud:focus-visible,
 .magazine-hud:focus-visible {
   outline: 2px solid var(--accent);
@@ -1214,8 +1247,156 @@ select {
   cursor: not-allowed;
 }
 
+.mode-hud {
+  flex: none;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  overflow: visible;
+}
+
+.mode-hud[data-holding="true"] {
+  background: linear-gradient(160deg, #615645, #50483c 55%, #3e3932);
+}
+
+.mode-hud::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--accent);
+  opacity: 0;
+  transform: scaleX(0);
+  transform-origin: left center;
+  pointer-events: none;
+}
+
+.mode-hud[data-selected="true"][data-holding="true"]::after {
+  opacity: 1;
+  animation: mode-release-progress 650ms linear forwards;
+}
+
+@keyframes mode-release-progress {
+  to { transform: scaleX(1); }
+}
+
+.freeroam-icon,
+.mode-face-icon {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.45));
+}
+
+.mode-face-icon {
+  position: absolute;
+  left: 5px;
+  top: 4px;
+}
+
+.mode-health {
+  display: block;
+  position: absolute;
+  left: 54px;
+  top: 10px;
+  width: 10px;
+  height: 32px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.45);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.mode-health::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.mode-health > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: bottom;
+}
+
+.mode-hud[data-selected="true"] .freeroam-icon,
+.mode-hud[data-selected="false"] .mode-face-icon {
+  display: none !important;
+}
+
+.mode-hud[data-selected="false"] .freeroam-icon {
+  width: 36px;
+  height: 36px;
+  transform: translateY(8px);
+}
+
+.detached-destinations {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 6px;
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  pointer-events: auto;
+}
+
+.mode-hud[data-selected="true"] .detached-destinations,
+.mode-hud[data-selected="true"] .detached-destination-name {
+  display: none;
+}
+
+.detached-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #77736d;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.65);
+}
+
+.detached-dot[data-current="true"] {
+  background: var(--accent);
+}
+
+.detached-destination-name {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  min-width: 78px;
+  transform: translateX(-50%);
+  color: var(--accent);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+  text-shadow: 0 1px 2px #000, 0 0 5px #000;
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.detached-destination-name.show {
+  animation: detached-destination-name 1.15s ease-out forwards;
+}
+
+@keyframes detached-destination-name {
+  0%, 58% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 .jetpack-hud[data-equipped="true"] {
-  width: 158px;
+  width: 164px;
 }
 
 .jetpack-hud {
@@ -1225,6 +1406,7 @@ select {
 }
 
 .weapon-hud {
+  flex: none;
   gap: 6px;
   padding: 0;
   pointer-events: auto;
@@ -1233,6 +1415,83 @@ select {
 
 .weapon-hud[data-equipped="true"] {
   width: 218px;
+}
+
+.primary-hud {
+  flex: none;
+  padding: 0;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+
+.primary-hud[data-equipped="true"],
+.weapon-hud[data-equipped="true"],
+.jetpack-hud[data-equipped="true"] {
+  border-bottom-color: var(--accent);
+}
+
+.primary-strength {
+  display: block;
+  position: relative;
+  width: 10px;
+  height: 32px;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.45);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.primary-strength::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.primary-strength-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--accent);
+  transform: scaleY(0.25);
+  transform-origin: bottom;
+}
+
+.jetpack-compact-fuel {
+  display: block;
+  position: relative;
+  width: 10px;
+  height: 32px;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.45);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.jetpack-compact-fuel-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: bottom;
+}
+
+.jetpack-compact-fuel[data-level="low"] .jetpack-compact-fuel-fill {
+  background: var(--danger);
+}
+
+.primary-hud:not([data-equipped="true"]) .primary-strength-fill {
+  opacity: 0.45;
+}
+
+.primary-hud[data-charging="true"] .primary-strength-fill {
+  background: #ffd84a;
 }
 
 .magazine-hud {
@@ -1344,6 +1603,7 @@ select {
   cursor: pointer;
 }
 
+.primary-icon,
 .weapon-icon,
 .jetpack-icon {
   width: 40px;
@@ -1356,6 +1616,11 @@ select {
   width: 44px;
   height: 44px;
   transform: translate(-2px, -1px);
+}
+
+.primary-icon {
+  width: 44px;
+  height: 44px;
 }
 
 .weapon-readout {
@@ -1481,9 +1746,14 @@ select {
   background: var(--danger);
 }
 
+.jetpack-hud[data-equipped="true"] .jetpack-fuel-fill {
+  background: #ffd84a;
+}
+
 @media (max-width: 360px) {
   .equipment-hud { left: calc(8px + var(--safe-left)); }
   .weapon-equipment-row { gap: 4px; }
+  .jetpack-hud[data-equipped="true"] { width: 160px; }
 }
 
 /* Flight sticks for coarse pointers */
@@ -1548,6 +1818,7 @@ select {
 /* The caveman's action button on a phone */
 .act {
   position: absolute;
+  z-index: 13;
   left: 50%;
   bottom: calc(64px + var(--safe-bottom));
   transform: translateX(-50%);
@@ -3338,7 +3609,7 @@ body.orbit-dragging #tooltip {
   }
 
   #equipment-hud:has(.weapon-hud:not([hidden]), .magazine-hud:not([hidden])):has(.jetpack-hud:not([hidden]))~.bottom-hud>.message-stack {
-    --equipment-height: 116px;
+    --equipment-height: 176px;
   }
 
   .message-stack>.toast.show,
@@ -3424,9 +3695,38 @@ body.orbit-dragging #tooltip {
   }
 }
 
+/* Keep full-size weapon readouts on phones; spares move onto their own row. */
+@media (max-width: 430px) {
+  .weapon-equipment-row {
+    flex-wrap: wrap;
+    width: calc(100vw - 24px - var(--safe-left) - var(--safe-right));
+  }
+
+  .weapon-equipment-row .magazine-hud {
+    margin-right: calc(100% - 78px);
+  }
+
+  #equipment-hud:has(.magazine-hud:not([hidden]))~.bottom-hud>.message-stack {
+    --equipment-height: 116px;
+  }
+
+  #equipment-hud:has(.magazine-hud:not([hidden])):has(.jetpack-hud:not([hidden]))~.bottom-hud>.message-stack {
+    --equipment-height: 236px;
+  }
+}
+
+@media (max-width: 360px) {
+  .equipment-hud { left: calc(8px + var(--safe-left)); }
+  .weapon-equipment-row { width: calc(100vw - 16px - var(--safe-left) - var(--safe-right)); }
+}
+
 @media (max-height: 500px) and (orientation: landscape) {
   .equipment-hud {
     top: calc(74px + var(--safe-top));
+  }
+
+  #equipment-hud:has(.weapon-hud:not([hidden]), .magazine-hud:not([hidden])):has(.jetpack-hud:not([hidden]))~.bottom-hud>.message-stack {
+    --equipment-height: 116px;
   }
 
   .sheet {
@@ -3500,6 +3800,7 @@ body.orbit-dragging #tooltip {
     left: auto;
     right: calc(440px + var(--safe-right));
     bottom: calc(96px + var(--safe-bottom));
+    z-index: 13;
     transform: none;
   }
 
@@ -3790,6 +4091,9 @@ body.orbit-dragging #tooltip {
   stroke: #fff9dc;
   stroke-width: 1.5px;
   stroke-linecap: round;
+}
+.weapon-reticle[data-close="true"] > svg {
+  visibility: hidden;
 }
 .weapon-reticle > span {
   position: absolute;

@@ -21,6 +21,8 @@
   // Keep the canonical roster intact for activity, likenesses and stable indices.
   const params = new URLSearchParams(location.search);
   const solo = params.has("debug") && (params.get("solo") === "1" || params.get("solo") === "");
+  const requestedStatus = params.has("debug") ? params.get("status") : null;
+  const debugState = requestedStatus === "clankin" ? "working" : requestedStatus === "chillin" ? "chilling" : requestedStatus === "sleepin" ? "sleeping" : null;
   const character = params.get("character")?.trim().toLowerCase();
   const activeRoster = solo ? roster.filter((entry) => entry.name.toLowerCase() === character) : roster;
   const byName = new Map(roster.map((contributor) => [contributor.name.toLowerCase(), contributor]));
@@ -34,10 +36,12 @@
   };
   // Callers use the canonical lowercase repository key, keeping frame queries allocation-free.
   const hasRecentActivity = (contributor, repo, at = Date.now()) => {
+    if (debugState === "working" && repo === ENTROPY) return true;
     const seen = contributor.activity.get(repo);
     return seen > 0 && seen <= at && at - seen < WORK_WINDOW;
   };
   const stateFor = (contributor, at = Date.now()) => {
+    if (debugState) return debugState;
     const age = at - contributor.lastCommitAt;
     if (!Number.isFinite(age) || contributor.lastCommitAt <= 0 || age < 0) return "sleeping";
     if (age < WORK_WINDOW) return "working";
@@ -187,5 +191,5 @@
     if (likeness.height) traits.height = likeness.height;
     return traits;
   };
-  BL.contributors = { roster, activeRoster, solo, stateFor, ageLabel, traitsFor, voiceFor, hasRecentActivity, applyActivity, applySnapshot, subscribe, seedDebugActivity };
+  BL.contributors = { roster, activeRoster, solo, debugState, stateFor, ageLabel, traitsFor, voiceFor, hasRecentActivity, applyActivity, applySnapshot, subscribe, seedDebugActivity };
 })();

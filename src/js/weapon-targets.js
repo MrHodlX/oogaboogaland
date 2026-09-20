@@ -80,6 +80,8 @@
     const entries = new WeakMap(), transforms = new WeakMap(), clubs = new WeakMap();
     const stack = new Int32Array(64), point = new Float64Array(3), triangle = new Float64Array(9), swept = new Float64Array(9), clipped = new Float64Array(12);
     const sweepBox = new Float64Array(6), queryBox = new Float64Array(6), low = new Float64Array(3), high = new Float64Array(3);
+    const verticalTriangle = new Float64Array(9), verticalSegment = new Float64Array(6);
+    const verticalHit = { node: null, owner: null, type: "none", distance: Infinity, x: 0, y: 0, z: 0 };
     const stats = { queries: 0, candidates: 0, triangleTests: 0, transforms: 0 };
     let generation = 0, originX = 0, originY = 0, originZ = 0;
     let contactDistance = Infinity, contactTriangle = Infinity, contactX = 0, contactY = 0, contactZ = 0;
@@ -149,14 +151,14 @@
     const onMirror = (node, bounds, x, y) => x >= bounds.min[0] - EPS && x <= bounds.max[0] + EPS
       && y >= bounds.min[1] + (bounds.max[1] - bounds.min[1]) * (node.mirrorReveal || 0) - EPS && y <= bounds.max[1] + EPS
       && (!node.mirrorDamage || node.mirrorDamage.contains(x, y));
-    const ray = (out, ox, oy, oz, dx, dy, dz, maxDistance, ignore = null) => {
+    const ray = (out, ox, oy, oz, dx, dy, dz, maxDistance, ignore = null, accept = null) => {
       begin(out);
       const length = Math.hypot(dx, dy, dz);
       if (!length || maxDistance < 0) return false;
       dx /= length; dy /= length; dz /= length;
       let nearest = maxDistance;
       for (const target of targets) {
-        if (!eligible(target, ignore)) continue;
+        if (!eligible(target, ignore) || accept && !accept(target.owner, target.node)) continue;
         const entry = sync(target.node);
         if (!entry || !rayBox(entry.box, ox, oy, oz, dx, dy, dz, nearest)) continue;
         stats.candidates++;
@@ -187,6 +189,97 @@
         if (found < Infinity) { nearest = found; hit(out, target, found, ox + dx * found, oy + dy * found, oz + dz * found); }
       }
       return !!out.node;
+    };
+    // A carry-view shot may adjust height, but never turn toward the orbit
+    // camera. Slice eligible meshes with the body's forward vertical plane;
+    // precise rays and the scene's solid sweep still decide visibility.
+    const verticalRay = (out, ox, oy, oz, dx, dz, maxDistance, ignore = null, clear = null, accept = null) => {
+      begin(out);
+      const length = Math.hypot(dx, dz);
+      if (!length || maxDistance <= 0) return false;
+      dx /= length; dz /= length;
+      const consider = (ax, ay, az, bx, by, bz) => {
+        const vx = bx - ax, vy = by - ay, vz = bz - az, norm = vx * vx + vy * vy + vz * vz;
+        const nearest = norm ? Math.max(0, Math.min(1, ((ox - ax) * vx + (oy - ay) * vy + (oz - az) * vz) / norm)) : 0;
+        // Endpoints let a partly exposed surface remain a candidate when its
+        // nearest point is hidden behind scenery.
+        for (let sample = 0; sample < 3; sample++) {
+          const t = sample === 0 ? nearest : sample - 1, x = ax + vx * t, y = ay + vy * t, z = az + vz * t;
+          const rx = x - ox, ry = y - oy, rz = z - oz, distance = Math.hypot(rx, ry, rz);
+          if (rx * dx + rz * dz <= EPS || distance > maxDistance || distance >= out.distance || distance < EPS) continue;
+          if (!ray(verticalHit, ox, oy, oz, rx, ry, rz, distance + 1e-5, ignore, accept)) continue;
+          const margin = Math.max(0, 1 - 1e-5 / verticalHit.distance);
+          if (clear && !clear(ox, oy, oz, ox + (verticalHit.x - ox) * margin, oy + (verticalHit.y - oy) * margin,
+            oz + (verticalHit.z - oz) * margin, verticalHit.node, true)) continue;
+          if (verticalHit.distance < out.distance) Object.assign(out, verticalHit);
+        }
+      };
+      for (const target of targets) {
+        if (!eligible(target, ignore) || accept && !accept(target.owner, target.node)) continue;
+        const entry = sync(target.node);
+        if (!entry) continue;
+        // A damaged mirror remains one aimable surface even when the forward
+        // slice crosses a hole. Resolve that slice against the original pane,
+        // then let mirror damage choose the closest surviving panel.
+        if (target.node.mirror && target.node.mirrorDamage?.aimCenter) {
+          const m = entry.inverse, source = geometryOf(target.node.mirrorCaptureGeometry || target.node.geometry).bounds;
+          mat4.transformPoint(point, m, ox, oy, oz);
+          const ux = m[0] * dx + m[8] * dz, uz = m[2] * dx + m[10] * dz;
+          const t = Math.abs(uz) > 1e-12 ? (source.min[2] - point[2]) / uz : -1;
+          const lx = point[0] + ux * t, ly = point[1];
+          if (t > EPS && lx >= source.min[0] - EPS && lx <= source.max[0] + EPS
+            && ly >= source.min[1] - EPS && ly <= source.max[1] + EPS) {
+            const x = ox + dx * t, z = oz + dz * t;
+            if (target.node.mirrorDamage.aimCenter(verticalHit, x, oy, z)) {
+              const rx = verticalHit.x - ox, ry = verticalHit.y - oy, rz = verticalHit.z - oz;
+              const distance = Math.hypot(rx, ry, rz), forward = rx * dx + rz * dz;
+              if (forward > EPS && distance <= maxDistance && distance < out.distance
+                && (!clear || clear(ox, oy, oz, verticalHit.x, verticalHit.y, verticalHit.z, target.node, true))) {
+                hit(out, target, distance, verticalHit.x, verticalHit.y, verticalHit.z);
+              }
+            }
+          }
+          continue;
+        }
+        const box = entry.box, cx = (box[0] + box[3]) / 2 - ox, cz = (box[2] + box[5]) / 2 - oz;
+        const hx = (box[3] - box[0]) / 2, hz = (box[5] - box[2]) / 2;
+        if (Math.abs(cx * dz - cz * dx) > Math.abs(dz) * hx + Math.abs(dx) * hz + EPS
+          || cx * dx + cz * dz + Math.abs(dx) * hx + Math.abs(dz) * hz <= 0) continue;
+        const bx = Math.max(box[0] - ox, 0, ox - box[3]), by = Math.max(box[1] - oy, 0, oy - box[4]), bz = Math.max(box[2] - oz, 0, oz - box[5]);
+        const limit = Math.min(maxDistance, out.distance);
+        if (bx * bx + by * by + bz * bz > limit * limit) continue;
+        const data = entry.data || (entry.data = geometryOf(target.node.geometry)), m = entry.world;
+        for (let at = 0; at < data.triangles.length; at += 3) {
+          for (let vertex = 0; vertex < 3; vertex++) {
+            const index = data.triangles[at + vertex], x = data.verts[index], y = data.verts[index + 1], z = data.verts[index + 2];
+            for (let axis = 0; axis < 3; axis++) verticalTriangle[vertex * 3 + axis] = m[axis] * x + m[axis + 4] * y + m[axis + 8] * z + m[axis + 12];
+          }
+          let count = 0;
+          for (let edge = 0; edge < 3; edge++) {
+            const a = edge * 3, b = (edge + 1) % 3 * 3;
+            const sa = (verticalTriangle[a] - ox) * dz - (verticalTriangle[a + 2] - oz) * dx;
+            const sb = (verticalTriangle[b] - ox) * dz - (verticalTriangle[b + 2] - oz) * dx;
+            if (Math.abs(sa) <= EPS && Math.abs(sb) <= EPS) {
+              consider(verticalTriangle[a], verticalTriangle[a + 1], verticalTriangle[a + 2], verticalTriangle[b], verticalTriangle[b + 1], verticalTriangle[b + 2]);
+              continue;
+            }
+            if (sa * sb > 0 || Math.abs(sa - sb) < EPS) continue;
+            const t = sa / (sa - sb);
+            for (let axis = 0; axis < 3; axis++) verticalSegment[count * 3 + axis] = verticalTriangle[a + axis] + (verticalTriangle[b + axis] - verticalTriangle[a + axis]) * t;
+            if (count && Math.hypot(verticalSegment[3] - verticalSegment[0], verticalSegment[4] - verticalSegment[1], verticalSegment[5] - verticalSegment[2]) < EPS) continue;
+            if (++count === 2) {
+              consider(verticalSegment[0], verticalSegment[1], verticalSegment[2], verticalSegment[3], verticalSegment[4], verticalSegment[5]);
+              break;
+            }
+          }
+        }
+      }
+      return !!out.node;
+    };
+    const valid = (contact, ignore = null) => {
+      generation++;
+      for (const target of targets) if (target.node === contact.node && target.owner === contact.owner) return eligible(target, ignore);
+      return false;
     };
     // Segment against a triangle, including the coplanar contact at the start
     // of a swing. Every accepted point belongs to both actual mesh surfaces.
@@ -343,7 +436,7 @@
       }
       return !!out.node;
     };
-    return { ray, strike, register, stats };
+    return { ray, verticalRay, strike, valid, register, stats };
   };
   BL.weaponTargets = { create };
 })();

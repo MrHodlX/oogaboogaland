@@ -42,23 +42,43 @@ launcher to use it with Space. The action button changes to
 These actions work from every direction without needing to face them; the car's
 platform and the plane's wings have room around them to activate the launcher. Click or tap
 decorative props to interact with them. Walking into the lit lab cave enters it.
-**Escape** lets go.
+**Escape** lets go. Camera modes are **first-person**, **shoulder**, **orbit**, and
+**detached**. The first three stay focused on the selected Ooga; detached is free roaming.
+The leftmost equipment button shows only a face-on portrait while an Ooga is selected.
+Press the portrait to switch between battle and carry mode without changing the camera
+mode; **0** performs the same toggle. Hold it until the orange underline fills to detach. Detached mode shows the roaming
+compass with five dots above it for Pile, Lab, Mirror, HQ, and Basement: press the compass to cycle
+them, or press a dot to go directly there. The active dot turns orange and its destination
+name briefly appears below the button.
 Trees stay compact: you can walk through the lower half of their foliage and
 stand on their upper canopy. Trunks and roots remain solid.
 The banana pile's stone platform requires a jump; walking into its edge stops you.
-The **AK-47** button appears above the jetpack controls while driving an awake Ooga.
-Click it or press **G** to equip or put away their rifle; clicking anywhere in the
-expanded control, including the ammo, puts it away. When put away, its compact count
+The primary-weapon and **AK-47** buttons appear above the jetpack controls while driving an awake Ooga.
+The primary icon matches that character's melee weapon. Click either button to select
+its weapon without changing your view. In zoomed-out carry view, pressing the selected
+primary button charges a swing and releasing strikes; a quick release pokes instead.
+Its compact vertical gauge starts at 50% damage, rises to 100% for a brief press, and
+fills to 200% when fully charged. In battle mode that button selects the primary weapon; use left
+mouse on the island to swing. Clicking the selected AK button targets the closest visible
+shootable item along the character's facing direction in carry view, adjusting vertically
+as needed (or firing straight ahead if none is present), and uses the reticle in battle mode. **G** still
+switches between weapons. When the rifle is put away, its compact count
 shows loaded and spare rounds together. Equipping a weapon keeps your
-current view. Outside shooter mode, the stock rests by the front of the leg,
+current view. In carry mode, the stock rests by the front of the leg,
 with the right hand lowered on the grip and the barrel angled up toward the
 left hand, which turns to cradle the wooden grip.
-Scrolling in or right-clicking from carry mode raises it to aim with the mouse. Third person uses an
+Scrolling in changes orbit to shoulder view. In orbit battle mode the pointer stays captured,
+the Ooga faces the view, and the reticle snaps vertically to the nearest clear target directly
+ahead. Its spread grows with distance; a target beside the Ooga reduces the reticle to its dot
+and is hit automatically. With no target, shots travel horizontally ahead. Right-click enters
+shoulder view while retaining an acquired target. Third person uses an
 above-head right-shoulder camera that keeps the whole character visible, with the
 crosshair near the top of the head and over the right arm; first person keeps the
-eye view and always uses shooter controls while awake, including on initial load
-and after waking up. Both show a centered aiming reticle. While aiming, the left arm hangs naturally and swings with
-walking. In these shooter views, **WASD**
+eye view. A page loaded directly in first person starts in battle mode with mouse-look focused;
+the first canvas click upgrades it to unrestricted pointer lock. Shoulder and first-person
+show a centered aiming reticle only in battle mode; switching to carry hides it without
+moving the camera. While aiming, the left arm hangs naturally and swings with
+walking. In battle mode, **WASD**
 strafe and backpedal relative to the view without turning away from the target.
 **Left mouse** fires the equipped gun or swings the primary melee weapon. A quick
 click fires three bananas; holding continues into full auto at the same shot cadence.
@@ -71,14 +91,17 @@ while in shooting mode, and **Shift** sprints forward. **Escape** or **Tab**
 frees the mouse for UI controls and pauses mouse aiming. The next click on the island
 hides the cursor without attacking; subsequent clicks fire or swing while it is hidden.
 **1** selects the club or assigned primary melee skin; **2** selects the rifle and
-carries the primary weapon diagonally across the back. Neither key changes the camera, and **0**
-does not switch views. In shooter mode the club is held outward: hold left-click
-to raise it, then release to strike. Holding for about a second raises the arm farther,
-up to a 50% longer swing with 50% more damage; focused aim and charging never stack above that bonus.
-The arm and wrist extend toward the aimed spot
-for the club's full reach, then return to the ready pose. Navigation uses its relaxed carry pose.
-Clicking the AK button switches between the rifle and the active primary melee weapon.
-Scroll inward from navigation to the closest view to enter shoulder aim with the
+carries the primary weapon diagonally across the back. Neither key changes the camera; **0** toggles
+battle and carry without changing it. In battle mode the club is held outward: a quick left-click
+release pokes forward for half damage; a brief press swings for normal damage.
+Hold longer to raise the weapon and charge up to double damage, then release to strike.
+The same duration-based gestures work with a mouse, trackpad, or the carry-view melee button.
+Focused aim boosts an ordinary swing to 150%; a full charge reaches 200%, without multiplying those bonuses.
+The arm and wrist extend toward the aimed spot for the weapon's full reach. An orange
+melee reticle selects the object that receives the hit. Axe pokes preserve the blade's
+orientation. After an attack in carry view, the weapon stays ready for half a second,
+then smoothly lowers back into its carry pose over a quarter second.
+Scroll inward from orbit to the closest view to enter shoulder view with the
 last selected melee weapon or rifle, swooping toward the point under your cursor.
 The pointer glides into the centered aiming dot along with that camera transition.
 Four separated arcs show the rifle's shot spread: bananas cluster around the dot
@@ -97,10 +120,9 @@ Scroll outward once for shoulder aim, then again for centered navigation and
 further zooming out; one large outward scroll from shoulder aim can pull all the
 way back. Zoom follows your chosen angle with a gentle added downward tilt,
 keeping the distant view shallow; beneath a ceiling, zoom stays horizontal.
-Zooming out keeps your selected weapon equipped. Mouse clicks attack only in
-the shooter views.
+Zooming out keeps your selected weapon equipped. Mouse clicks on the island attack
+only in battle mode; the weapon buttons also work in carry mode.
 Focus returns to the character at the start of the outward zoom, even if you stop scrolling partway.
-Returning from shooting view to carry mode places the pointer at the center of the screen.
 Moving the mouse moves the pointer; drag to rotate the camera as before.
 **Escape** or **Tab** releases the normal browser cursor.
 Burning keeps your current view but blocks swings and shots; press **Space** to
@@ -180,10 +202,10 @@ EntropyLab is the first registered work cave; adding a repository to
 an open cave's `repo` field includes it in this rotation. See
 [the activity data contract](docs/activity-contract.md) for the Oogatron snapshot
 integration. Historical snapshot dates do not imply current activity.
-The newest contribution keeps an Ooga clankin for four hours, chillin through 48
-hours, and sleepin afterward.
+The newest contribution keeps an Ooga in the clank state for four hours, chill through 48
+hours, and sleep afterward.
 Debug mode seeds three workers, three chilling Oogas, and two sleepers.
-Roster labels show yellow for clankin, orange for chillin, and gray for sleepin.
+Roster labels show yellow for clank, orange for chill, and gray for sleep.
 A separate dot before each roster name is green while a human controls that Ooga
 and gray while offline; activity labels stay visible in either case. Hovered names
 keep their existing dot colors: green while human-controlled, otherwise the activity
@@ -193,9 +215,10 @@ Landing on another Ooga carries you along with their movement. You can still
 look around, walk across them, or jump off; walls and ceilings remain solid.
 
 The jetpack starts spinning above a cloud beyond the island. Reach that cloud and jump
-into the pack to collect it. Its compact button then appears at the upper left; click it
-or press **J** to put the controlled Ooga's jetpack on or take it off. The compact button
-keeps the fuel percentage visible and expands to show the fuel bar while the pack is worn. With the jetpack equipped,
+into the pack to collect it. The pack belongs to the Ooga who collects it: its compact
+button appears only while that Ooga is selected, and stays hidden in detached mode or while
+controlling another Ooga. Click it or press **J** to put that Ooga's jetpack on or take it off. The compact button
+keeps a vertical fuel gauge visible and expands to the width of both weapon buttons to show a yellow fuel bar while the pack is worn. With the jetpack equipped,
 tap **Space** on the ground for a weighted hop, half the height of a normal jump,
 or hold it to keep climbing under thrust. Clicking an Ooga still shows a talking
 bubble without making them hop.
@@ -220,6 +243,8 @@ inside the basement's central shaft. Fly up through that opening from below the
 island; the pack comes off once you clear its lip onto the basement walking ring. The
 compact button remains visible but disabled underground, and can equip the pack again
 after returning above ground.
+When its owner sleeps, the pack rests against the wall behind the bed beside their
+primary and secondary weapons.
 
 Wandering Oogas walk around the banana pile and keep off its platform rim.
 You can still walk, jump, or fly through the fruit, with walking and vertical
@@ -488,6 +513,12 @@ Add `&solo=1` (or bare `&solo`) in debug mode to load only the character named b
 `?debug=1&solo=1&character=w-s-bitcoin` loads just that Ooga, while `?debug=1&solo=1`
 loads the scenery alone. Solo stays active across scene changes, omits rally spectators,
 and never selects a fallback character for `jetpack=1`. Use `solo=0` to restore the full roster.
+
+Add `&status=clankin`, `&status=chillin`, or `&status=sleepin` with `debug=1` to force
+every character's activity for the session. The setting survives hub/lab visits and
+activity refreshes, and clankin characters can work at EntropyLab. It also applies with
+`solo`; selecting a sleepin character keeps them asleep until you wake them normally.
+Taking control still works, and releasing the character returns them to the chosen activity.
 
 ## Test
 

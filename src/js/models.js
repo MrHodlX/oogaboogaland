@@ -1025,6 +1025,18 @@
     // Laser eyes are the only lit faces on the head; closed lids cover them
     const headEmissive = traits.laserEyes ? { [P.btc]: 1 } : traits.pumpkin ? { [P.pumpkinGlow]: 1 } : undefined;
     const headOpen = vg(headVox, headOrigin, headEmissive);
+    // Portraits use the central face rather than the full silhouette. Long
+    // hair, antennae, stems and crowns still belong to the world model, but
+    // must not pull the small HUD portrait away from the eyes and mouth.
+    const portraitVox = makeVox();
+    const portraitWide = traits.apple || traits.pumpkin;
+    const portraitTop = portraitWide ? 7 : 5;
+    for (const [k, c] of headVox.map) {
+      voxCoords(k, CELL);
+      const x = CELL[0], y = CELL[1], z = CELL[2];
+      if (x >= (portraitWide ? -1 : 0) && x <= (portraitWide ? 7 : 6) && y >= -2 && y <= portraitTop && z >= 0 && z <= 8) portraitVox.map.set(k, c);
+    }
+    const portraitHead = vg(portraitVox, headOrigin, headEmissive);
     const closedVox = makeVox();
     for (const [k, c] of headVox.map) closedVox.map.set(k, c);
     for (const [x, y] of eyeCells) closedVox.set(x, y, 5, traits.pumpkin ? P.pumpkinDk : y === 2 ? P.skinDk : P.skin);
@@ -1032,17 +1044,22 @@
     parts.head = createNode({ position: { x: 0, y: 0.5 * h, z: 0.02 * h }, geometry: headOpen });
     const hatY = traits.gasMask ? 0.66 * h : (traits.topHat ? (traits.pumpkin ? 15 : 13) : traits.bald ? 6 : traits.apple ? 8 : traits.anunnaki ? 12 : traits.skater ? 13 : traits.bee ? 11 : 9) * u;
     parts.hat = createNode({ position: { x: 0, y: hatY, z: 0 }, scale: { x: h, y: h, z: h }, visible: false });
+    parts.hat.portraitHidden = true;
     parts.face = createNode({ position: { x: 0, y: 0, z: 0 }, scale: { x: h, y: h, z: h }, visible: false });
     addChild(parts.head, parts.hat, parts.face);
     if (traits.gasMask) addChild(parts.head, createNode({ scale: { x: h, y: h, z: h }, geometry: gasMaskGeometry() }));
-    if (traits.topHat) addChild(parts.head, createNode({ position: { x: 0, y: (traits.pumpkin ? 7.5 : 5.5) * u, z: 0 }, rotation: { x: 0, y: 0, z: 0.06 }, scale: { x: h, y: h, z: h }, geometry: topHatGeometry() }));
+    if (traits.topHat) {
+      const topHat = createNode({ position: { x: 0, y: (traits.pumpkin ? 7.5 : 5.5) * u, z: 0 }, rotation: { x: 0, y: 0, z: 0.06 }, scale: { x: h, y: h, z: h }, geometry: topHatGeometry() });
+      topHat.portraitHidden = true;
+      addChild(parts.head, topHat);
+    }
     addChild(root, parts.legL, parts.legR, parts.torso, parts.armL, parts.armR, parts.head);
     if (traits.anunnaki) {
       parts.lion = createNode({ geometry: voxelGeometry(lionVoxels(rand), { unit: u, palette: LION_PALETTE, origin: { x: armX + 1.5 * u, y: -1 * u, z: -2 * u } }) });
       addChild(root, parts.lion);
     }
     if (traits.skater) addChild(root, createNode({ position: { x: 0, y: 0.28 * h, z: -0.35 * h }, rotation: { x: 0, y: 0, z: 0.4 }, geometry: skateboardGeometry(h) }));
-    return { root, parts, traits, headOffset: 1.1 * h, headOpen, headClosed, skins, gunHeadBounds: BL.scene.boundsOf(headOpen) };
+    return { root, parts, traits, headOffset: 1.1 * h, headOpen, headClosed, portraitHead, skins, gunHeadBounds: BL.scene.boundsOf(headOpen) };
   };
   // Traits hash from the handle, so one handle always builds the same voxels.
   // Each caller gets fresh nodes over one shared set of geometry objects: one
@@ -1065,7 +1082,7 @@
       parts[key] = Array.isArray(part) ? part.map((node) => copies.get(node)) : copies.get(part);
     }
     const skins = { club: { ...template.skins.club }, gun: { ...template.skins.gun } };
-    return { root, parts, traits, headOffset: template.headOffset, headOpen: template.headOpen, headClosed: template.headClosed, skins, gunHeadBounds: template.gunHeadBounds };
+    return { root, parts, traits, headOffset: template.headOffset, headOpen: template.headOpen, headClosed: template.headClosed, portraitHead: template.portraitHead, skins, gunHeadBounds: template.gunHeadBounds };
   };
   // A real die, opposite faces summing to seven
   const die = ({ size = 0.3 } = {}) => {
