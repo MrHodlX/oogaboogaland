@@ -62,7 +62,7 @@
     let quiet = 0, selected = null, paneSize = original.verts.length, bevelSize = 0;
     let healCrackDamage = 0;
     const panelHealth = new Float64Array(PANEL_LIMIT).fill(PANEL_HEALTH);
-    const state = { damage: 0, crackDamage: 0, panelHealth, stage: 0, version: 0, broken: false, active: 0, healing: 0, cracks: 0, holes: 0, seams: 0, hit, contains, update, restore, liveGeometry, dispose };
+    const state = { damage: 0, crackDamage: 0, panelHealth, stage: 0, version: 0, broken: false, active: 0, healing: 0, cracks: 0, holes: 0, seams: 0, hit, contains, aimCenter, update, restore, liveGeometry, dispose };
     function cut(nx, ny, offset, limit) {
       for (let i = panels.length - 1; i >= 0 && panels.length < limit; i--) {
         const polygon = panels[i], a = clip(polygon, nx, ny, offset), b = clip(polygon, -nx, -ny, -offset);
@@ -445,6 +445,23 @@
         }
       }
       return false;
+    }
+    function aimCenter(out, x, y, z) {
+      if (state.broken) return false;
+      mat4.transformPoint(point, inverse, x, y, z);
+      let cx = (minX + maxX) * 0.5, cy = (minY + maxY) * 0.5;
+      if (state.holes && selected && pieces.length) {
+        let nearest = Infinity, index = -1;
+        for (let p = 0; p < pieces.length; p++) {
+          const distance = paneDistance(p, point[0], point[1]);
+          if (distance < nearest) { nearest = distance; index = p; }
+        }
+        if (index < 0 || !Number.isFinite(nearest)) return false;
+        cx = pieces[index].x; cy = pieces[index].y;
+      }
+      mat4.transformPoint(point, node.world, cx, cy, plane);
+      out.x = point[0]; out.y = point[1]; out.z = point[2];
+      return true;
     }
     function update(dt) {
       if (state.damage > 0 && !state.broken) {

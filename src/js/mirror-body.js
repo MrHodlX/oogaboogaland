@@ -16,7 +16,7 @@
     const minX = bounds.min[0], minY = bounds.min[1], plane = bounds.min[2];
     const dx = (bounds.max[0] - minX) / SIZE, dy = (bounds.max[1] - minY) / SIZE, diagonal = Math.hypot(dx, dy);
     const mask = new Uint8Array(count), union = new Uint8Array(count), lastUnion = new Uint8Array(count);
-    const parity = new Uint8Array(count), distance = new Float32Array(count), glass = new Uint8Array(count);
+    const parity = new Uint8Array(count), rowParity = new Uint8Array(SIZE), distance = new Float32Array(count), glass = new Uint8Array(count);
     const actors = [], records = new WeakMap();
     let vertices = new Float64Array(0), alive = true;
     // Registration follows the scene's bounded actor and object pools. Only
@@ -89,7 +89,7 @@
       for (let row = first; row < end; row++) {
         const y = minY + (row + 0.5) * dy, x = ax + (bx - ax) * (y - ay) / (by - ay);
         const col = Math.max(0, Math.ceil((x - minX) / dx - 0.5));
-        if (col < SIZE) parity[row * SIZE + col] ^= 1;
+        if (col < SIZE) { parity[row * SIZE + col] ^= 1; rowParity[row] ^= 1; }
       }
     }
     function partMask(part, transform) {
@@ -111,7 +111,7 @@
         mat4.transformPoint(point, transform, verts[i], verts[i + 1], verts[i + 2]);
         vertices[i] = point[0]; vertices[i + 1] = point[1]; vertices[i + 2] = point[2] - cut;
       }
-      parity.fill(0);
+      parity.fill(0); rowParity.fill(0);
       for (const face of geometry.faces) {
         const indices = face.i;
         let found = false, ax = 0, ay = 0, bx = 0, by = 0, farthest = 0;
@@ -131,9 +131,16 @@
       }
       const first = Math.max(0, Math.ceil((Math.max(bottom, lowY) - minY) / dy - 0.5));
       const end = Math.min(SIZE, Math.ceil((highY - minY) / dy - 0.5));
+      const firstCol = Math.max(0, Math.floor((lowX - minX) / dx - 0.5));
+      const endCol = Math.min(SIZE, Math.ceil((highX - minX) / dx + 0.5));
       for (let row = first; row < end; row++) {
+        // A closed mesh has paired scanline crossings unless it continues
+        // through the pane's right edge. A grazing polygon can degenerate to
+        // one unmatched section. Never let that remnant flood from the body
+        // across the rest of the mirror.
+        if (rowParity[row] && highX < bounds.max[0] - dx * 0.5) continue;
         let inside = 0;
-        for (let col = 0, i = row * SIZE; col < SIZE; col++, i++) {
+        for (let col = firstCol, i = row * SIZE + col; col < endCol; col++, i++) {
           inside ^= parity[i];
           if (!inside || mask[i]) continue;
           if (node.mirrorDamage?.stage) {
