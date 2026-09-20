@@ -68,12 +68,25 @@
       context.walls = []; context.wallMap = new Map(); context.surfaceWallGroups = []; context.surfaceSamples = [];
       const search = context.searchBounds;
       const gallery = kind === "common" && !basement ? H.gallery : null;
+      const balconies = kind === "common" ? basement ? H.basement.balconies : H.balconies : null;
+      const balconyContains = (balcony, radius, angle, margin) => {
+        const angularMargin = radius > margin ? margin / radius : 0;
+        let start = balcony.startAngle, end = balcony.endAngle;
+        const join = balcony.roomJoin;
+        if (join && radius < join.toRadius + margin) {
+          const t = Math.max(0, Math.min(1, (radius - join.fromRadius) / (join.toRadius - join.fromRadius)));
+          const boundary = join.angle + ((balcony.side < 0 ? end : start) - join.angle) * t;
+          if (balcony.side < 0) end = boundary;
+          else start = boundary;
+        }
+        return radius <= balcony.openingRadius + margin && angle >= start - angularMargin && angle <= end + angularMargin;
+      };
       if (kind === "ramp") for (const p of source.samples) {
         const width = source.width / 2 + 0.4;
         search[0] = Math.min(search[0], p.x - width); search[2] = Math.min(search[2], p.z - width);
         search[3] = Math.max(search[3], p.x + width); search[5] = Math.max(search[5], p.z + width);
       } else {
-        const radius = kind === "common" ? (gallery ? gallery.radius : source.radius) + 0.4 : Math.hypot(source.width, source.depth) / 2 + 0.4;
+        const radius = kind === "common" ? Math.max(gallery ? gallery.radius : source.radius, ...(balconies || []).map((balcony) => balcony.openingRadius)) + 0.4 : Math.hypot(source.width, source.depth) / 2 + 0.4;
         search[0] = source.x - radius; search[2] = source.z - radius; search[3] = source.x + radius; search[5] = source.z + radius;
         if (kind === "room") {
           const corridor = (source.corridorWidth ?? source.width - 1.3) / 2 + 0.4;
@@ -96,7 +109,10 @@
         if (y < floor - margin || y > ceiling + margin) return false;
         if (kind === "common") {
           const radius = Math.hypot(x - source.x, z - source.z), angle = Math.atan2(x - source.x, source.z - z);
-          return radius <= source.radius + margin || !!gallery && radius <= gallery.radius + margin && angle >= gallery.startAngle - margin / radius && angle <= gallery.endAngle + margin / radius;
+          const angularMargin = radius > margin ? margin / radius : 0;
+          if (radius <= source.radius + margin || !!gallery && radius <= gallery.radius + margin && angle >= gallery.startAngle - angularMargin && angle <= gallery.endAngle + angularMargin) return true;
+          if (balconies) for (const balcony of balconies) if (balconyContains(balcony, radius, angle, margin)) return true;
+          return false;
         }
         const dx = x - source.x, dz = z - source.z, along = dx * sx + dz * sz, across = Math.abs(dx * -sz + dz * sx);
         const approach = (source.approach.x - source.x) * sx + (source.approach.z - source.z) * sz;

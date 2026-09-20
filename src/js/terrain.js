@@ -226,8 +226,12 @@
   };
   const UNDER_BANDS = [P.dirt, P.stoneDark, P.dirt, P.stone];
   const undersideDepthAt = (radius) => Math.max(0, UNDER_SPHERE_CENTER + Math.sqrt(Math.max(0, UNDER_SPHERE_RADIUS * UNDER_SPHERE_RADIUS - radius * radius)));
+  const undersideRadiusAt = (floor) => {
+    const reach = -floor - UNDER_SPHERE_CENTER;
+    return Math.sqrt(Math.max(0, UNDER_SPHERE_RADIUS * UNDER_SPHERE_RADIUS - reach * reach));
+  };
   // Slot, its ring clock, and its tunnel clock
-  const CLOCKS = [["c11", 11], ["c10", 10], ["c9", 9], ["c730", 7.5, 10.5], ["c1", 1], ["c2", 2], ["c3", 3], ["c5", 5, 2]];
+  const CLOCKS = [["c11", 11], ["c10", 10], ["c9", 9], ["c730", 7.25, 10.25], ["c1", 1], ["c2", 2], ["c3", 3], ["c5", 4.75, 1.75]];
   const HEADQUARTERS_CAVE = 9;
   const HEADQUARTERS_FLOOR = -7;
   const HEADQUARTERS_CEILING = -2.75;
@@ -559,12 +563,25 @@
       const to = samples[samples.length - 1];
       return { id: f.id, from, to: { x: to.x, z: to.z }, width: 4, startAngle, endAngle: startAngle + direction * HEADQUARTERS_RAMP_ARC, direction, slope: -samples[1].y / Math.hypot(samples[1].x - from.x, samples[1].z - from.z), axis: { x: f.ox, z: f.oz }, samples };
     });
-    const headquartersRooms = [120, 138, 160, 174, 188, 202, 216, 238, 255].map((degrees, index) => {
+    const headquartersRooms = [120, 138, 152, 166, 180, 194, 208, 238, 255].map((degrees, index) => {
       const angle = degrees / 180 * Math.PI, sx = Math.sin(angle), sz = -Math.cos(angle);
       const radius = 23.25, width = 5, depth = 5;
       return { index, angle, radius, window: true, floor: HEADQUARTERS_FLOOR, ceiling: HEADQUARTERS_CEILING, height: HEADQUARTERS_HEIGHT, x: sx * radius, z: sz * radius, width, depth, approach: { x: sx * 13.25, z: sz * 13.25 }, entrance: { x: sx * 18.5, z: sz * 18.5 }, back: { x: sx * (radius + depth / 2 - 0.2), z: sz * (radius + depth / 2 - 0.2) } };
     }).filter((room) => room.index >= 2 && room.index <= 6);
-    const headquartersGallery = { startAngle: -32 * Math.PI / 180, endAngle: 47 * Math.PI / 180, radius: 24.5 };
+    const headquartersGallery = { startAngle: -39.5 * Math.PI / 180, endAngle: 39.5 * Math.PI / 180, radius: 24.5 };
+    // Broad, level offshoots grow from the flat ends of both entrance ramps.
+    // The outer edge follows the ramp only after it has reached this floor;
+    // the last ramp window remains above the cut while the side rooms stay
+    // behind the opposite edge.
+    const headquartersBalconies = [-1, 1].map((side) => ({
+      side,
+      startAngle: side < 0 ? -100 * Math.PI / 180 : 63 * Math.PI / 180,
+      endAngle: side < 0 ? -63 * Math.PI / 180 : 100 * Math.PI / 180,
+      radius: undersideRadiusAt(HEADQUARTERS_FLOOR),
+      openingRadius: undersideRadiusAt(HEADQUARTERS_CEILING),
+      floor: HEADQUARTERS_FLOOR,
+      ceiling: HEADQUARTERS_CEILING
+    }));
     // The two spare nooks open sideways off the window gallery, away from the
     // clear ramp landings. Their entrances face the gallery, not the island centre.
     for (const side of [-1, 1]) {
@@ -576,12 +593,12 @@
       // Keep the frame's front outside the gallery so its corners leave turning room.
       headquartersRooms.push({ index: side < 0 ? 9 : 10, angle, radius: Math.hypot(x, z), window: true, floor: HEADQUARTERS_FLOOR, ceiling: HEADQUARTERS_CEILING, height: HEADQUARTERS_HEIGHT, windowAngle: Math.atan2(x, -z), windowAt: { x: x * windowScale, z: z * windowScale }, nook: true, x, z, width, depth, approach: { x: edgeX - sx * 1.1, z: edgeZ - sz * 1.1 }, entrance: { x: edgeX + sx * 0.35, z: edgeZ + sz * 0.35 }, back: { x: x + sx * (depth / 2 - 0.2), z: z + sz * (depth / 2 - 0.2) } });
     }
-    const carveHeadquartersColumn = (gx, gz, floor, ceiling, deep = false) => {
+    const carveHeadquartersColumn = (gx, gz, floor, ceiling, deep = false, ceilingMaterial = P.inner) => {
       const floorGy = SURFACE - 1 + Math.round(floor / UNIT);
       const ceilingGy = SURFACE + Math.round(ceiling / UNIT);
       grid.set(gx, floorGy, gz, P.floor);
       for (let gy = floorGy + 1; gy < ceilingGy; gy++) grid.set(gx, gy, gz, 0);
-      if (grid.has(gx, ceilingGy, gz)) grid.set(gx, ceilingGy, gz, P.inner);
+      if (grid.has(gx, ceilingGy, gz)) grid.set(gx, ceilingGy, gz, ceilingMaterial);
       if (!deep) lowerCavities[gx * SZ + gz] = encodeCavity(HEADQUARTERS_CAVE, floor, ceiling);
       for (let gy = floorGy + 1; gy < ceilingGy; gy++) {
         if (grid.has(gx + 1, gy, gz)) grid.set(gx + 1, gy, gz, strata((gx + 1) * UNIT + ORIGIN.x, gz * UNIT + ORIGIN.z, gy));
@@ -589,6 +606,32 @@
         if (grid.has(gx, gy, gz + 1)) grid.set(gx, gy, gz + 1, strata(gx * UNIT + ORIGIN.x, (gz + 1) * UNIT + ORIGIN.z, gy));
         if (grid.has(gx, gy, gz - 1)) grid.set(gx, gy, gz - 1, strata(gx * UNIT + ORIGIN.x, (gz - 1) * UNIT + ORIGIN.z, gy));
       }
+    };
+    const carveBalconyOpening = (balcony) => {
+      const reach = balcony.openingRadius + UNIT, gx0 = Math.max(0, Math.floor((-reach - ORIGIN.x) / UNIT)), gx1 = Math.min(SX - 1, Math.ceil((reach - ORIGIN.x) / UNIT));
+      const gz0 = Math.max(0, Math.floor((-reach - ORIGIN.z) / UNIT)), gz1 = Math.min(SZ - 1, Math.ceil((reach - ORIGIN.z) / UNIT));
+      const floorGy = SURFACE - 1 + Math.round(balcony.floor / UNIT), ceilingGy = SURFACE + Math.round(balcony.ceiling / UNIT);
+      for (let gx = gx0; gx <= gx1; gx++) {
+        const x = (gx + 0.5) * UNIT + ORIGIN.x;
+        for (let gz = gz0; gz <= gz1; gz++) {
+          const z = (gz + 0.5) * UNIT + ORIGIN.z, radius = Math.hypot(x, z);
+          if (radius < balcony.radius || radius >= balcony.openingRadius) continue;
+          const angle = Math.atan2(x, -z);
+          if (!insideBalcony(balcony, radius, angle)) continue;
+          for (let gy = floorGy + 1; gy < ceilingGy; gy++) grid.set(gx, gy, gz, 0);
+        }
+      }
+    };
+    const insideBalcony = (balcony, radius, angle) => {
+      let start = balcony.startAngle, end = balcony.endAngle;
+      const join = balcony.roomJoin;
+      if (join && radius < join.toRadius) {
+        const t = clamp((radius - join.fromRadius) / (join.toRadius - join.fromRadius), 0, 1);
+        const boundary = join.angle + ((balcony.side < 0 ? end : start) - join.angle) * t;
+        if (balcony.side < 0) end = boundary;
+        else start = boundary;
+      }
+      return angle > start && angle < end;
     };
     const rampProbe = { distance: 0, floor: 0 };
     const sampleRamp = (ramp, x, z, out) => {
@@ -641,9 +684,14 @@
           if (rampProbe.distance > ramp.width / 2 || (wx - ramp.from.x) * ramp.axis.x + (wz - ramp.from.z) * ramp.axis.z < -UNIT / 2) continue;
           const floor = rampProbe.floor;
           rampCells[gx * SZ + gz] = ri + 1;
-          carveHeadquartersColumn(gx, gz, Math.max(HEADQUARTERS_FLOOR - UNIT, Math.floor(floor / UNIT) * UNIT - UNIT), Math.ceil((floor + 3.5) / UNIT) * UNIT);
           const frame = headquartersFrames[ri], dx = wx - frame.x, dz = wz - frame.z;
           const along = dx * frame.ox + dz * frame.oz, across = Math.abs(dz * frame.ox - dx * frame.oz);
+          const ceiling = Math.ceil((floor + 3.5) / UNIT) * UNIT;
+          // The ramp ceiling begins as an exposed lintel and remains visible
+          // down the open stairwell. Keep it in the cliff palette throughout
+          // instead of introducing a black interior-material strip.
+          const ceilingMaterial = strata(wx, wz, SURFACE + Math.round(ceiling / UNIT));
+          carveHeadquartersColumn(gx, gz, Math.max(HEADQUARTERS_FLOOR - UNIT, Math.floor(floor / UNIT) * UNIT - UNIT), ceiling, false, ceilingMaterial);
           if (along > frame.e - 0.48 && along < ROOM.to && across < ROOM.w / 2) {
             const index = frames.indexOf(frame) + 1;
             for (let gy = SURFACE + Math.floor(floor / UNIT) - 1; gy < SURFACE + Math.ceil((floor + 3.5) / UNIT); gy++) {
@@ -653,14 +701,15 @@
         }
       }
     }
-    const roomGX0 = Math.floor((-27 - ORIGIN.x) / UNIT), roomGX1 = Math.ceil((27 - ORIGIN.x) / UNIT);
-    const roomGZ0 = Math.floor((-27 - ORIGIN.z) / UNIT), roomGZ1 = Math.ceil((27 - ORIGIN.z) / UNIT);
+    const roomGX0 = Math.floor((-RADIUS - ORIGIN.x) / UNIT), roomGX1 = Math.ceil((RADIUS - ORIGIN.x) / UNIT);
+    const roomGZ0 = Math.floor((-RADIUS - ORIGIN.z) / UNIT), roomGZ1 = Math.ceil((RADIUS - ORIGIN.z) / UNIT);
     for (let gx = roomGX0; gx <= roomGX1; gx++) {
       const wx = (gx + 0.5) * UNIT + ORIGIN.x;
       for (let gz = roomGZ0; gz <= roomGZ1; gz++) {
         const wz = (gz + 0.5) * UNIT + ORIGIN.z;
         const radius = Math.hypot(wx, wz), angle = Math.atan2(wx, -wz);
         let inside = radius < HEADQUARTERS_ROOM.radius || radius < headquartersGallery.radius && angle > headquartersGallery.startAngle && angle < headquartersGallery.endAngle;
+        for (const balcony of headquartersBalconies) if (tops[gx * SZ + gz] !== NONE && radius < balcony.radius && insideBalcony(balcony, radius, angle)) inside = true;
         for (const room of headquartersRooms) {
           if (insideRoom(room, wx, wz)) inside = true;
         }
@@ -674,6 +723,7 @@
         carveHeadquartersColumn(gx, gz, HEADQUARTERS_FLOOR, HEADQUARTERS_CEILING);
       }
     }
+    for (const balcony of headquartersBalconies) carveBalconyOpening(balcony);
     let rampGeometry = { verts: [], faces: [], lines: [] };
     for (let gx = 0; gx <= SX; gx++) {
       for (let gz = 0; gz <= SZ; gz++) {
@@ -704,6 +754,24 @@
         // renderer's exact triangles, including the clipped doorway boundary.
         rampCollision[gx * SZ + gz] = (rampGeometry.faces.length << 2) | (clipped.length - 2);
         for (let n = 1; n < clipped.length - 1; n++) rampGeometry.faces.push({ i: [v, v + n, v + n + 1], color: PALETTE[(Math.floor(gx / 4) + Math.floor(gz / 4)) % 5 === 0 ? P.stoneDark : P.floor], emissive: 0, headquartersRamp: true, matrixCave: cave, matrixWorldGlyphSurface: cave !== 0 });
+      }
+    }
+    // The curved ramp tops are separate from their stepped voxel supports.
+    // Close exposed boundary edges so balcony cuts cannot reveal that seam.
+    for (let gx = 0; gx < SX; gx++) for (let gz = 0; gz < SZ; gz++) {
+      const cell = gx * SZ + gz, ri = rampCells[cell];
+      if (!ri) continue;
+      const x = gx * UNIT + ORIGIN.x, z = gz * UNIT + ORIGIN.z, i = gx * (SZ + 1) + gz;
+      const corners = [[x, rampHeights[i], z], [x, rampHeights[i + 1], z + UNIT], [x + UNIT, rampHeights[i + SZ + 2], z + UNIT], [x + UNIT, rampHeights[i + SZ + 1], z]];
+      const base = (((lowerCavities[cell] >> 4) & 63) - 32) * UNIT;
+      const neighbors = [gx ? rampCells[cell - SZ] : 0, gz + 1 < SZ ? rampCells[cell + 1] : 0, gx + 1 < SX ? rampCells[cell + SZ] : 0, gz ? rampCells[cell - 1] : 0];
+      for (let edge = 0; edge < 4; edge++) {
+        if (neighbors[edge] === ri) continue;
+        const a = corners[edge], b = corners[(edge + 1) % 4];
+        if (a[1] <= base + 1e-7 && b[1] <= base + 1e-7) continue;
+        const v = rampGeometry.verts.length / 3;
+        rampGeometry.verts.push(a[0], a[1], a[2], a[0], base, a[2], b[0], base, b[2], b[0], b[1], b[2]);
+        rampGeometry.faces.push({ i: [v, v + 1, v + 2, v + 3], color: PALETTE[P.stoneDark], emissive: 0, headquartersRampSkirt: ri });
       }
     }
     // Build-time route geometry; heights are solved separately from the upper tunnels.
@@ -746,11 +814,11 @@
       const dz = (Math.floor((z - ORIGIN.z) / UNIT) + 0.5) * UNIT + ORIGIN.z - basementHole.z;
       return dx * dx + dz * dz < basementHole.radius * basementHole.radius;
     };
-    for (const [index, degrees] of [-30, -10, 10, 30, 155, 178, 201, 222].entries()) {
-      const angle = degrees * Math.PI / 180, sx = Math.sin(angle), sz = -Math.cos(angle), radius = 18, width = 5, depth = 5;
+    for (const [index, degrees] of [-50, -30, -10, 10, 30, 50, 146, 169, 191, 214].entries()) {
+      const angle = degrees * Math.PI / 180, sx = Math.sin(angle), sz = -Math.cos(angle), radius = 18, width = Math.abs(degrees) <= 50 ? 5.5 : 5, depth = 5;
       basement.rooms.push({ index, basement: true, angle, radius, width, depth, corridorWidth: 2.6, height: HEADQUARTERS_HEIGHT, window: true, x: sx * radius, z: sz * radius, approach: { x: sx * 8.25, z: sz * 8.25 }, entrance: { x: sx * 9.25, z: sz * 9.25 }, back: { x: sx * (radius + depth / 2 - 0.2), z: sz * (radius + depth / 2 - 0.2) } });
     }
-    for (const [index, degrees, mainId] of [[1, 138, "c5"], [7, 238, "c730"]]) {
+    for (const [index, degrees, mainId] of [[1, 130, "c5"], [7, 230, "c730"]]) {
       const angle = degrees * Math.PI / 180, ramp = buildBasementRoute(headquartersRamps.find((entry) => entry.id === mainId), angle);
       ramp.basement = true; ramp.index = index; ramp.angle = angle;
       ramp.entrance = { x: Math.sin(angle) * 14.5, y: HEADQUARTERS_FLOOR, z: -Math.cos(angle) * 14.5 };
@@ -824,33 +892,79 @@
       sampleRamp(ramp, ramp.entrance.x, ramp.entrance.z, rampProbe);
       ramp.entrance.y = rampProbe.floor;
     }
+    // The lower balconies match the arcs above, beginning beyond the six-room
+    // bank and ending where both basement ramps have finished descending. They
+    // stop at this floor's own tapered cliff edge.
+    basement.balconies = [-1, 1].map((side) => {
+      const room = basement.rooms[side < 0 ? 0 : 5], fromRadius = Math.hypot(room.entrance.x, room.entrance.z);
+      const archHalfAngle = Math.asin((room.corridorWidth / 2 + UNIT * 2) / fromRadius);
+      return {
+        side,
+        startAngle: side < 0 ? -100 * Math.PI / 180 : 63 * Math.PI / 180,
+        endAngle: side < 0 ? -63 * Math.PI / 180 : 100 * Math.PI / 180,
+        roomJoin: { angle: room.angle + side * archHalfAngle, fromRadius, toRadius: 14.25 },
+        radius: undersideRadiusAt(basement.floor),
+        openingRadius: undersideRadiusAt(basement.ceiling),
+        floor: basement.floor,
+        ceiling: basement.ceiling
+      };
+    });
+    basement.connectors = [];
+    const basementRoutes = basement.ramps, basementCommon = 3;
+    for (let gx = 0; gx < SX; gx++) {
+      const x = (gx + 0.5) * UNIT + ORIGIN.x;
+      for (let gz = 0; gz < SZ; gz++) {
+        const z = (gz + 0.5) * UNIT + ORIGIN.z, cell = gx * SZ + gz, radius = Math.hypot(x, z), angle = Math.atan2(x, -z);
+        for (const balcony of basement.balconies) if (tops[cell] !== NONE && radius < balcony.radius && insideBalcony(balcony, radius, angle)) basementCells[cell] = basementCommon;
+      }
+    }
     // The slopes use the same two triangles per voxel as their support queries.
     for (let gx = 0; gx <= SX; gx++) for (let gz = 0; gz <= SZ; gz++) {
       let ri = 0;
       for (let dx = -1; dx <= 0; dx++) for (let dz = -1; dz <= 0; dz++) {
         const x = gx + dx, z = gz + dz, cell = x >= 0 && z >= 0 && x < SX && z < SZ ? basementCells[x * SZ + z] : 0;
-        if (cell && cell < 3) ri = cell;
+        if (cell && cell < basementCommon) ri = cell;
       }
       if (!ri) continue;
-      sampleRamp(basement.ramps[ri - 1], gx * UNIT + ORIGIN.x, gz * UNIT + ORIGIN.z, rampProbe);
+      sampleRamp(basementRoutes[ri - 1], gx * UNIT + ORIGIN.x, gz * UNIT + ORIGIN.z, rampProbe);
       basementHeights[gx * (SZ + 1) + gz] = rampProbe.floor;
     }
     for (let gx = 0; gx < SX; gx++) for (let gz = 0; gz < SZ; gz++) {
       const cell = gx * SZ + gz, ri = basementCells[cell];
       if (!ri) continue;
       const x = gx * UNIT + ORIGIN.x, z = gz * UNIT + ORIGIN.z, i = gx * (SZ + 1) + gz;
-      const a = ri < 3 ? basementHeights[i] : basement.floor, b = ri < 3 ? basementHeights[i + 1] : basement.floor, c = ri < 3 ? basementHeights[i + SZ + 2] : basement.floor, d = ri < 3 ? basementHeights[i + SZ + 1] : basement.floor;
+      const a = ri < basementCommon ? basementHeights[i] : basement.floor, b = ri < basementCommon ? basementHeights[i + 1] : basement.floor, c = ri < basementCommon ? basementHeights[i + SZ + 2] : basement.floor, d = ri < basementCommon ? basementHeights[i + SZ + 1] : basement.floor;
       const low = Math.min(a, b, c, d), high = Math.max(a, b, c, d), sloped = high - low > 1e-9;
       const floor = sloped ? Math.floor(low / UNIT) * UNIT - UNIT : low, ceiling = Math.ceil((high + HEADQUARTERS_HEIGHT) / UNIT) * UNIT;
       carveHeadquartersColumn(gx, gz, floor, ceiling, true);
       basementCavities[cell] = encodeCavity(HEADQUARTERS_CAVE, floor, ceiling, 64);
-      if (ri === 3) basementCells[cell] = 0;
+      if (ri === basementCommon) basementCells[cell] = 0;
       if (!sloped) continue;
       const v = rampGeometry.verts.length / 3;
       rampGeometry.verts.push(x, a, z, x, b, z + UNIT, x + UNIT, c, z + UNIT, x + UNIT, d, z);
       basementCollision[cell] = (rampGeometry.faces.length << 2) | 2;
       rampGeometry.faces.push({ i: [v, v + 1, v + 2], color: PALETTE[P.floor], emissive: 0, headquartersBasementRamp: ri }, { i: [v, v + 2, v + 3], color: PALETTE[P.floor], emissive: 0, headquartersBasementRamp: ri });
     }
+    // The wider openings expose the outer edge of each lower ramp. Continue
+    // its visible sides down to the carved support instead of leaving slivers
+    // of sky between the smooth ramp and its stepped voxel base.
+    for (let gx = 0; gx < SX; gx++) for (let gz = 0; gz < SZ; gz++) {
+      const cell = gx * SZ + gz, ri = basementCells[cell];
+      if (!ri || ri >= basementCommon) continue;
+      const x = gx * UNIT + ORIGIN.x, z = gz * UNIT + ORIGIN.z, i = gx * (SZ + 1) + gz;
+      const corners = [[x, basementHeights[i], z], [x, basementHeights[i + 1], z + UNIT], [x + UNIT, basementHeights[i + SZ + 2], z + UNIT], [x + UNIT, basementHeights[i + SZ + 1], z]];
+      const base = (((basementCavities[cell] >> 4) & 63) - 64) * UNIT;
+      const neighbors = [gx ? basementCells[cell - SZ] : 0, gz + 1 < SZ ? basementCells[cell + 1] : 0, gx + 1 < SX ? basementCells[cell + SZ] : 0, gz ? basementCells[cell - 1] : 0];
+      for (let edge = 0; edge < 4; edge++) {
+        if (neighbors[edge] === ri) continue;
+        const a = corners[edge], b = corners[(edge + 1) % 4];
+        if (a[1] <= base + 1e-7 && b[1] <= base + 1e-7) continue;
+        const v = rampGeometry.verts.length / 3;
+        rampGeometry.verts.push(a[0], a[1], a[2], a[0], base, a[2], b[0], base, b[2], b[0], b[1], b[2]);
+        rampGeometry.faces.push({ i: [v, v + 1, v + 2, v + 3], color: PALETTE[P.stoneDark], emissive: 0, headquartersBasementRampSkirt: ri });
+      }
+    }
+    for (const balcony of basement.balconies) carveBalconyOpening(balcony);
     // The central shaft opens through the underside, leaving a broad walking
     // ring around it. Two shallow voxel steps bevel its mouth; render faces
     // and footing use these same cells, with no decorative collision lip.
@@ -986,7 +1100,10 @@
         // voxel diagonal, removing thin strips at its quantized wall edge.
         const planes = [[-sx, 0, -sz, -start], [sx, 0, sz, end], [tx - horizontal * sx, 0, tz - horizontal * sz, half - horizontal * start], [-tx - horizontal * sx, 0, -tz - horizontal * sz, half - horizontal * start], [-vertical * sx, -1, -vertical * sz, -window.sill - vertical * start], [-vertical * sx, 1, -vertical * sz, window.sill + window.height - vertical * start]];
         window.flare.frusta.push({ angle, start, end, half, horizontal, vertical, planes, inner });
-        const lower = window.sill - vertical * (end - start), upper = window.sill + window.height + vertical * (end - start);
+        const lower = window.sill - vertical * (end - start);
+        // A basement reveal may flare through its outer cliff face, but it
+        // must stop at that level's ceiling instead of cutting the HQ slab.
+        const upper = Math.min(window.sill + window.height + vertical * (end - start), window.basement ? basement.ceiling : Infinity);
         // The footprint test below only passes inside this rectangle's bounds; one spare column absorbs rounding.
         const reach = half + horizontal * (end - start) + UNIT;
         const spanX = Math.abs(tx) * reach, spanZ = Math.abs(tz) * reach;
@@ -1936,7 +2053,7 @@
       isPath,
       onLand,
       mouths,
-      headquarters: { caveIndex: HEADQUARTERS_CAVE, floor: HEADQUARTERS_FLOOR, ceiling: HEADQUARTERS_CEILING, rockCover: HEADQUARTERS_ROCK, room: HEADQUARTERS_ROOM, rooms: headquartersRooms, windows: headquartersWindows, windowFragments: windowFragmentCount, windowFaces: windowGeometry.faces.length, gallery: headquartersGallery, ramps: headquartersRamps, fronts: headquartersFronts, basement },
+      headquarters: { caveIndex: HEADQUARTERS_CAVE, floor: HEADQUARTERS_FLOOR, ceiling: HEADQUARTERS_CEILING, rockCover: HEADQUARTERS_ROCK, room: HEADQUARTERS_ROOM, rooms: headquartersRooms, windows: headquartersWindows, windowFragments: windowFragmentCount, windowFaces: windowGeometry.faces.length, gallery: headquartersGallery, balconies: headquartersBalconies, ramps: headquartersRamps, fronts: headquartersFronts, basement },
       gate: { x: 0, z: GATE_Z, ry: 0 },
       radius: RADIUS,
       undersideDepth: DEPTH,

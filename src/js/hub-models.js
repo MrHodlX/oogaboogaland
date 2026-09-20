@@ -521,11 +521,27 @@
     box({ w: 0.1, h: 4, d: 0.1, color: WOOD, offset: { x: 0.4, y: 2 } }),
     ...Array.from({ length: 9 }, (_, n) => box({ w: 0.9, h: 0.08, d: 0.08, color: "#7a5630", offset: { y: 0.35 + n * 0.42 } }))
   ));
-  const dock = cached(() => merge(
-    ...Array.from({ length: 8 }, (_, n) => box({ w: 0.46, h: 0.1, d: 2, color: n % 2 ? "#8f6538" : "#9c7040", offset: { x: 0.25 + n * 0.5, y: -0.05 } })),
-    box({ w: 4, h: 0.14, d: 0.16, color: WOOD_DK, offset: { x: 2, y: -0.17, z: -0.92 } }),
-    box({ w: 4, h: 0.14, d: 0.16, color: WOOD_DK, offset: { x: 2, y: -0.17, z: 0.92 } }),
-    ...[[0.5, -0.8], [0.5, 0.8], [3.5, -0.8], [3.5, 0.8]].map(([x, z]) => box({ w: 0.2, h: 2.2, d: 0.2, color: "#6b4a2b", offset: { x, y: -1.2, z } }))
-  ));
+  const dock = cached(() => {
+    // Two braces carry the outer edge back into the cliff. Keeping their
+    // upper ends at the old outer posts preserves the dock's silhouette while
+    // removing the redundant pair beside the island.
+    const innerX = 0.35, innerY = -2.2, outerX = 3.88, outerY = -0.17;
+    const dx = outerX - innerX, dy = outerY - innerY, length = Math.hypot(dx, dy);
+    const brace = (z) => {
+      const geo = turn(box({ w: 0.2, h: length, d: 0.2, color: "#6b4a2b" }), 0, -Math.atan2(dx, dy));
+      for (let i = 0; i < geo.verts.length; i += 3) {
+        geo.verts[i] += (innerX + outerX) / 2;
+        geo.verts[i + 1] += (innerY + outerY) / 2;
+        geo.verts[i + 2] += z;
+      }
+      return geo;
+    };
+    return merge(
+      ...Array.from({ length: 8 }, (_, n) => box({ w: 0.46, h: 0.1, d: 2, color: n % 2 ? "#8f6538" : "#9c7040", offset: { x: 0.25 + n * 0.5, y: -0.05 } })),
+      box({ w: 4, h: 0.14, d: 0.16, color: WOOD_DK, offset: { x: 2, y: -0.17, z: -0.92 } }),
+      box({ w: 4, h: 0.14, d: 0.16, color: WOOD_DK, offset: { x: 2, y: -0.17, z: 0.92 } }),
+      ...[-0.8, 0.8].map(brace)
+    );
+  });
   BL.hubModels = { SIGN_GLYPHS, jetpack, jetFlame, caveMouthRim, mirrorPanel, matrixPrisonBars, sealedCaveFace, matrixButtonStand, matrixButton, matrixGlyph, caveSign, CAVE_SIGN_WIDTH, CAVE_SIGN_HEIGHT, gate, caveShelves, bedroll, tree, bush, rock, altarSlab, altarBlock, woodCrate, barrel, flowerTuft, torch, grass, lantern, firepit, fireFlame, butterfly, firefly, ember, vine, cloud, ladder, dock, TREE_HEIGHT };
 })();
