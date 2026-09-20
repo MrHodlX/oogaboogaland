@@ -2,7 +2,7 @@
   "use strict";
   const BL = window.BL = window.BL || {};
   const { models, hubModels } = BL;
-  const { randomInt, mat4 } = BL.math;
+  const { randomInt, mat4, ease } = BL.math;
   const { createNode, addChild, removeChild, updateWorld, traverseVisible } = BL.scene;
   const MAX_PROPS = 26;
   const TYPES = {
@@ -18,12 +18,14 @@
     { kind: "magazine", amount: 30, label: "", scale: 2.4 },
     { kind: "jetpack", amount: 1, label: "", scale: 1.2 }
   ];
-  let fullMagazine = null;
-  const magazineGeometry = () => {
-    if (fullMagazine) return fullMagazine;
-    // A dropped magazine is always full. Bake its ten indicators into one
-    // shared mesh once instead of keeping ten animated children per pickup.
+  const magazineGeometries = new Array(31);
+  const magazineGeometry = (rounds = 30) => {
+    const ammo = Math.max(0, Math.min(30, Math.floor(rounds)));
+    if (magazineGeometries[ammo]) return magazineGeometries[ammo];
+    // Bake each ammunition state into a shared mesh on first use instead of
+    // keeping indicator children animated on every ground pickup.
     const model = models.spareMagazine(), parts = [], point = new Float32Array(3);
+    model.setAmmo(ammo);
     updateWorld(model.node);
     traverseVisible(model.node, (node) => {
       if (!node.geometry) return;
@@ -34,15 +36,15 @@
       }
       parts.push({ verts, faces: source.faces, lines: source.lines });
     });
-    fullMagazine = models.merge(...parts);
-    return fullMagazine;
+    magazineGeometries[ammo] = models.merge(...parts);
+    return magazineGeometries[ammo];
   };
   const create = (ctx) => {
     const { root, renderer, fx, crew } = ctx;
     const records = [];
     const rewardGeometry = { banana: models.bananaGeometry(), magazine: magazineGeometry(), jetpack: hubModels.jetpack() };
     const screen = { x: 0, y: 0, depth: 0 };
-    let time = 0, brokenCount = 0, rewardCount = 0;
+    let time = 0, brokenCount = 0, rewardCount = 0, revealingCount = 0;
     const register = (owner) => {
       if (owner.kind !== "prop" || !Object.hasOwn(TYPES, owner.prop)) return null;
       if (owner.breakable) return owner.breakable;
@@ -50,7 +52,9 @@
       const type = TYPES[owner.prop];
       const node = createNode({ visible: false, sightHidden: true });
       addChild(root, node);
-      const record = { owner, type, health: type.health, maxHealth: type.health, broken: false, respawnAt: 0, reward: null, node, hoverY: 0, phase: records.length * 2.4 };
+      const scale = owner.node.scale;
+      const record = { owner, type, health: type.health, maxHealth: type.health, broken: false, respawnAt: 0, reward: null, rewardAmount: 0, node, hoverY: 0, phase: records.length * 2.4,
+        reveal: 0, revealY: owner.node.position.y, scaleX: scale.x, scaleY: scale.y, scaleZ: scale.z };
       records.push(record);
       owner.breakable = record;
       return record;
@@ -58,6 +62,7 @@
     const hideReward = (record) => {
       if (!record.reward) return;
       record.reward = null;
+      record.rewardAmount = 0;
       record.node.visible = false;
       if (ctx.untrackMirrorObject) ctx.untrackMirrorObject(record.node);
       rewardCount--;
@@ -72,6 +77,7 @@
       if (!reward) return;
       const node = record.node, origin = record.owner.node.position;
       record.reward = reward;
+      record.rewardAmount = reward.amount;
       record.hoverY = origin.y + 0.48;
       node.geometry = rewardGeometry[reward.kind];
       node.position.x = origin.x;
@@ -90,6 +96,7 @@
       record.health = Math.max(0, record.health - power);
       fx.burst(contact.x, contact.y, contact.z, record.health ? 2 : 7, record.type.debris, record.health ? 0.8 : 1.5);
       if (record.health) return true;
+      if (record.reveal) { record.reveal = 0; revealingCount--; }
       record.broken = true;
       record.respawnAt = time + 30 + randomInt(31);
       brokenCount++;
@@ -105,6 +112,28 @@
       const cap = cave ? Math.min(cave.bodyRadius, cave.bodyHeight / 2) : 0;
       const bottom = feet + cap, top = cave ? feet + cave.bodyHeight - cap : 0;
       for (const record of records) {
+        if (record.reveal) {
+          record.reveal = Math.min(1, record.reveal + dt / 0.65);
+          const node = record.owner.node;
+          if (record.owner.prop === "rock") {
+            const k = ease.outQuad(record.reveal), lift = 0.05 + 0.95 * k;
+            node.scale.x = record.scaleX * (0.7 + 0.3 * k);
+            node.scale.y = record.scaleY * lift;
+            node.scale.z = record.scaleZ * (0.7 + 0.3 * k);
+            node.position.y = record.revealY - BL.scene.boundsOf(node.geometry).max[1] * record.scaleY * 0.05 * (1 - k);
+          } else {
+            const k = Math.max(0.01, ease.outBack(record.reveal));
+            node.scale.x = record.scaleX * k;
+            node.scale.y = record.scaleY * k;
+            node.scale.z = record.scaleZ * k;
+          }
+          if (record.reveal === 1) {
+            record.reveal = 0;
+            node.position.y = record.revealY;
+            node.scale.x = record.scaleX; node.scale.y = record.scaleY; node.scale.z = record.scaleZ;
+            revealingCount--;
+          }
+        }
         if (!record.broken) continue;
         if (elapsed >= record.respawnAt) {
           // Expire the old drop even if all safe respawn spots are occupied.
@@ -114,6 +143,15 @@
           if (ctx.relocate(record.owner)) {
             record.health = record.maxHealth;
             record.respawnAt = 0;
+            record.reveal = 1e-7;
+            record.revealY = record.owner.node.position.y;
+            revealingCount++;
+            if (record.owner.prop === "rock") {
+              record.owner.node.scale.x = record.scaleX * 0.7;
+              record.owner.node.scale.y = record.scaleY * 0.05;
+              record.owner.node.scale.z = record.scaleZ * 0.7;
+              record.owner.node.position.y = record.revealY - BL.scene.boundsOf(record.owner.node.geometry).max[1] * record.owner.node.scale.y;
+            } else record.owner.node.scale.x = record.owner.node.scale.y = record.owner.node.scale.z = 0.01;
             brokenCount--;
           } else {
             record.broken = true;
@@ -128,7 +166,16 @@
         if (!cave) continue;
         const dx = playerPosition.x - p.x, dz = playerPosition.z - p.z;
         const dy = Math.max(bottom - p.y, p.y - top, 0);
-        if (dx * dx + dy * dy + dz * dz <= reach * reach && ctx.collectReward(record.reward.kind, record.reward.amount, cave)) hideReward(record);
+        if (dx * dx + dy * dy + dz * dz > reach * reach) continue;
+        if (record.reward.kind === "magazine") {
+          const before = record.rewardAmount;
+          const remaining = crew.collectGroundMagazine(before, cave);
+          if (remaining === before) continue;
+          record.rewardAmount = remaining;
+          if (ctx.onAmmoPickup) ctx.onAmmoPickup(before - remaining, remaining);
+          if (!remaining) hideReward(record);
+          else node.geometry = magazineGeometry(remaining);
+        } else if (ctx.collectReward(record.reward.kind, record.reward.amount, cave)) hideReward(record);
       }
     };
     const drawOverlay = (overlay) => {
@@ -163,10 +210,10 @@
         record.owner.breakable = null;
       }
       records.length = 0;
-      brokenCount = rewardCount = 0;
+      brokenCount = rewardCount = revealingCount = 0;
     };
-    const stats = () => ({ breakablesProps: records.length, breakablesBroken: brokenCount, breakablesRewards: rewardCount });
-    return { list: records, register, hit, update, drawOverlay, dispose, stats, liveGeometry, get inMotion() { return rewardCount > 0; } };
+    const stats = () => ({ breakablesProps: records.length, breakablesBroken: brokenCount, breakablesRewards: rewardCount, breakablesRevealing: revealingCount });
+    return { list: records, register, hit, update, drawOverlay, dispose, stats, liveGeometry, get inMotion() { return rewardCount > 0 || revealingCount > 0; } };
   };
   BL.breakables = { create, MAX_PROPS };
 })();
