@@ -17,6 +17,7 @@
   const mayPick = c => !BL.net.mayDrive(c.name, BL.contributors.stateFor(c) === "working");
   const accountChanged = () => {
     if (!avatar) return;
+    if (session?.live?.account && session.live.account !== String(BL.net.state.me?.id)) session.live.disconnect("Account changed. Reload and sign in to the original account to recover this game.");
     const released = BL.net.state.released;
     const denied = mayPossess(avatar) || (released && released.name === avatar.traits.name ? "That Ooga is no longer yours to drive" : null);
     BL.net.state.released = null;
@@ -36,6 +37,7 @@
   const leaveFloor = () => { if (leaving) return; if (session.live && seatTable >= 0) { panel.notice("Stand between hands before leaving. You can walk the floor while connected."); return; } if (go("bifrost", null, true)) leaving = true; };
   const setView = focused => {
     panel.setFocused(focused); pilot.controls.reset();
+    BL.net.setPokerVoice(focused ? selected : null);
     pilot.setActive(!focused && (seatTable < 0 || pendingStand));
   };
   const placeInAisle = () => {
@@ -101,9 +103,11 @@
     if (connecting || session.live) return;
     if (seatTable >= 0) throw new Error("Stand from your practice table before connecting");
     connecting = true;
+    let restoring = true;
     const live = BL.pokerLive.create(() => {
       if (!panel || session?.live !== live) return;
       HERO = live.identity || "connecting";
+      if (restoring && live.connected) { selected = live.table; restoring = false; if (panel.focused) BL.net.setPokerVoice(selected); }
       const previous = seatTable;
       seatTable = live.tables.findIndex(t => t.snapshot().seats.some(s => s?.id === HERO));
       if (seatTable >= 0 && previous < 0) { selected = seatTable; pendingStand = false; sit(live.tables[seatTable].snapshot().seats.findIndex(s => s?.id === HERO)); setView(true); }
@@ -310,6 +314,7 @@
   const leave = () => {
     session.selected = selected; session.pendingStand = pendingStand;
     if (session.live) session.live.dispose();
+    BL.net.setPokerVoice(null);
     world.pilot = avatar.traits.name;
     unsubscribeAccount(); unsubscribeAccount = null; BL.net.setBody(null);
     for (const t of room.tables) t.agent.dispose();

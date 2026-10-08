@@ -54,11 +54,11 @@ export class Room extends DurableObject {
   }
 
   record(ws, a) {
-    return { ws, voice: { pub: null, sub: null, track: null, gen: 0 }, muted: false, hp: 100, ko: false, sent: null, zone: OUTSIDE, inHub: false, joinedAt: Date.now(), ...a, bucket: { tokens: MOVE_HZ, at: Date.now() }, npcBucket: { tokens: NPC_HZ, at: Date.now() }, hpBucket: { tokens: HP_HZ, at: Date.now() }, seenAt: Date.now() };
+    return { ws, voice: { pub: null, sub: null, track: null, gen: 0 }, muted: false, hp: 100, ko: false, sent: null, zone: OUTSIDE, pokerVoice: null, inHub: false, joinedAt: Date.now(), ...a, bucket: { tokens: MOVE_HZ, at: Date.now() }, npcBucket: { tokens: NPC_HZ, at: Date.now() }, hpBucket: { tokens: HP_HZ, at: Date.now() }, seenAt: Date.now() };
   }
 
   attachment(p) {
-    return { id: p.id, login: p.login, display: p.display, contributor: p.contributor, body: p.body, x: p.x, y: p.y, z: p.z, yaw: p.yaw, voice: p.voice, muted: p.muted, hp: p.hp, ko: p.ko, sent: p.sent, zone: p.zone, inHub: p.inHub, joinedAt: p.joinedAt };
+    return { id: p.id, login: p.login, display: p.display, contributor: p.contributor, body: p.body, x: p.x, y: p.y, z: p.z, yaw: p.yaw, voice: p.voice, muted: p.muted, hp: p.hp, ko: p.ko, sent: p.sent, zone: p.zone, pokerVoice: p.pokerVoice, inHub: p.inHub, joinedAt: p.joinedAt };
   }
 
   view(p) {
@@ -149,8 +149,14 @@ export class Room extends DurableObject {
     } else if (msg.t === "zone") {
       if (msg.name === p.zone) return;
       p.zone = msg.name;
+      p.pokerVoice = null;
       this.broadcast({ t: "zone", id: p.id, name: p.zone });
       // The page let go of every voice when it moved, so it always hears where it is now, changed list or not.
+      p.sent = null;
+      this.updateVoice();
+    } else if (msg.t === "poker-voice") {
+      if (p.zone !== "ember-den" || msg.table === p.pokerVoice) return;
+      p.pokerVoice = msg.table;
       p.sent = null;
       this.updateVoice();
     } else if (msg.t === "hp") {

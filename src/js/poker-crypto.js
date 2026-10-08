@@ -110,10 +110,14 @@
       return c === await challenge("share", context, key, card, share[0], t1, t2);
     } catch { return false; }
   };
-  const player = () => {
-    let secret = random(); const publicKey = encode(gmul(secret));
+  const player = (saved = null) => {
+    let secret = saved === null ? random() : scalar(saved);
+    if (!secret) throw new Error("Invalid private key");
+    const publicKey = encode(gmul(secret));
     const live = () => { if (!secret) throw new Error("Private key has been discarded"); };
     return Object.freeze({ publicKey,
+      // Only the private worker uses this, immediately sealing it in its account-scoped checkpoint.
+      checkpoint() { live(); return hex(secret); },
       async sign(purpose, value) { live(); const r = random(), t = encode(gmul(r)); const c = await challenge("signature", purpose, publicKey, value, t); return [t, hex(mod(r + c * secret, N))]; },
       async share(card, context) { live(); const a = decode(card[0], true), d = mul(a, secret), r = random(), dWire = encode(d);
         const c = await challenge("share", context, publicKey, card, dWire, encode(gmul(r)), encode(mul(a, r)));

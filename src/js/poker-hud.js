@@ -225,7 +225,9 @@
     const setLive = value => {
       live = value; by("fairness").hidden = !live;
       by("connect").hidden = !!live; by("practice").hidden = !live;
-      by("live-label").textContent = live ? "Shared tables · experimental protocol" : "Shared tables use an experimental verifiable shuffle.";
+      by("forget").hidden = !live?.recoverable;
+      by("nickname").disabled = !!live?.recoverable;
+      by("live-label").textContent = live?.recoverable ? "Signed-in tables · recovery saved on this device" : live ? "Shared tables · experimental protocol" : "Signed-in live tables use your Ooga name and save encrypted recovery on this device. Local service names are set above.";
       by("bots").hidden = by("pause").hidden = !!live; auto.parentElement.hidden = !!live;
       el.querySelector('[data-poker-action="quick"]').hidden = !!live;
       if (live) {

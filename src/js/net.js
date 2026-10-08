@@ -50,6 +50,7 @@
   let npcFrame = null, inHub = false, hubSent = null;
   let zone = "outside", body = null, muted = false, hpSent = 100, koSent = false, hpAt = 0, poseAt = 0, px = NaN, py = NaN, pz = NaN, pyaw = NaN;
   let clockOffset = 0, clockKnown = false;
+  let pokerVoice = null;
   // A server timestamp minus the arrival time is the true offset less the trip; the largest such
   // sample is the one that travelled fastest, so it is the best estimate yet.
   const clockSample = (serverMs) => {
@@ -86,6 +87,7 @@
 
   const sendBody = () => send(JSON.stringify({ t: "body", name: body }));
   const sendZone = () => send(JSON.stringify({ t: "zone", name: zone }));
+  const sendPokerVoice = () => { if (zone === "ember-den") send(JSON.stringify({ t: "poker-voice", table: pokerVoice })); };
   const sendMute = () => send(muted ? '{"t":"mute","on":true}' : '{"t":"mute","on":false}');
   // What the room hears is "showing the island now": the hub scene, in a visible tab.
   const sendHub = () => {
@@ -145,6 +147,7 @@
       // A reconnect picks up where the page is: the Ooga still driven and where it stands, and voice,
       // whose sessions the room forgot with the old socket.
       sendZone();
+      sendPokerVoice();
       sendBody();
       if (muted) sendMute();
       // A fresh room record starts at full health; the next report sends ours if it differs.
@@ -299,9 +302,17 @@
     if (name === zone) return;
     const moved = !sameGroup(name, zone);
     zone = state.zone = name;
+    pokerVoice = null;
     poseAt = 0; px = NaN;
     if (moved) BL.voice.setPeers([]);
     sendZone();
+  };
+  // Voice changes without moving or hiding anybody on the shared floor.
+  const setPokerVoice = table => {
+    if (zone !== "ember-den" || table !== null && (!Number.isInteger(table) || table < 0 || table >= 10) || pokerVoice === table) return;
+    pokerVoice = table;
+    BL.voice.setPeers([]);
+    sendPokerVoice();
   };
 
   // The hub says when it shows the island; a hidden tab stops counting until it is looked at again.
@@ -423,5 +434,5 @@
     close("off");
   };
 
-  BL.net = { start, subscribe, subscribeRoster, dispose, login, logout, rejoin, setBody, setZone, setHub, setMuted, setHealth, sendNpc, sendPose, mayDrive, ownCharacter, characterOf, serverNow, remotes, state, get npcFrame() { return npcFrame; } };
+  BL.net = { start, subscribe, subscribeRoster, dispose, login, logout, rejoin, setBody, setZone, setPokerVoice, setHub, setMuted, setHealth, sendNpc, sendPose, mayDrive, ownCharacter, characterOf, serverNow, remotes, state, get npcFrame() { return npcFrame; } };
 })();

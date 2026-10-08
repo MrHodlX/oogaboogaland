@@ -143,6 +143,23 @@ test("health: a driven Ooga's health is clamped to 0-100 and needs its knocked-o
   assert.equal(parseClientMessage('{"t":"hp","v":50}'), null);
 });
 
+// Contract: spectators keep floor visibility while hearing only the table they selected.
+test("Ember Den voice separates ten tables and the walking floor without changing zones", async () => {
+  const { voicePeers } = await import("../src/protocol.js");
+  const player = (id, pokerVoice) => ({ id, pokerVoice, zone: "ember-den", body: `fixture-${id}`, voice: { sub: "receive", track: "mic" } });
+  const players = [player(1, 0), player(2, 0), player(3, 1), player(4, null), player(5, null), player(6, 9)];
+  const peers = voicePeers(players);
+  assert.deepEqual(peers.get(1), [2]);
+  assert.deepEqual(peers.get(3), []);
+  assert.deepEqual(peers.get(4), [5]);
+  assert.deepEqual(peers.get(6), []);
+  players[2].pokerVoice = 0;
+  assert.deepEqual(voicePeers(players).get(3), [1, 2]);
+  assert.ok(players.every(p => p.zone === "ember-den"));
+  for (const table of [null, 0, 9]) assert.deepEqual(parseClientMessage(JSON.stringify({ t: "poker-voice", table })), { t: "poker-voice", table });
+  for (const table of [-1, 10, 0.5, "0", undefined]) assert.equal(parseClientMessage(JSON.stringify({ t: "poker-voice", table })), null);
+});
+
 test("NPC host: the page longest in the room among those showing the island; nobody when none does", async () => {
   const { electHost, parseClientMessage } = await import("../src/protocol.js");
   const p = (id, joinedAt, inHub) => ({ id, joinedAt, inHub });

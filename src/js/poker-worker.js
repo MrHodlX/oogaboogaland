@@ -5,22 +5,47 @@
   const C = self.BL.pokerCrypto, M = self.BL.pokerMatch;
   let identity, handKey, keyHand = "", token = "", table = 0, mirror = null, record = null, lastRecord = null;
   let running = false, fatal = false, controller = null, revision = -1, seq = 0, latest = null;
+  let connecting = false, storage = null, instance = "", account = null, display = null, pending = null;
   const actions = [];
   const post = (type, value) => self.postMessage({ type, ...value });
+  const stop = message => { fatal = true; running = false; controller?.abort(); storage?.close(); storage = null; handKey?.dispose(); identity?.dispose(); post("fatal", { message }); };
+  const persist = async () => {
+    if (!storage) return;
+    try {
+      await storage.save({ version: 1, instance, identity: identity.checkpoint(), publicKey: identity.publicKey,
+        table, seq, hand: handKey?.checkpoint() || null, keyHand, record, lastRecord, pending });
+    } catch { const error = new Error("Recovery could not be saved. Live play stopped; free storage and reload before the hand times out."); error.fatal = true; throw error; }
+  };
   const jsonFetch = async (path, options = {}) => {
-    const response = await fetch(path, { cache: "no-store", credentials: "omit", ...options,
-      headers: { ...(token ? { Authorization: "Bearer " + token } : {}), ...(options.body ? { "Content-Type": "application/json" } : {}), ...options.headers } });
-    const data = await response.json(); if (!response.ok) { const e = new Error(data.error || "Room request failed"); e.rejected = true; throw e; } return data;
+    const response = await fetch(path, { cache: "no-store", credentials: "same-origin", ...options,
+      headers: { ...(token ? { Authorization: "Bearer " + token } : {}), ...(instance ? { "X-Poker-Instance": instance } : {}), ...(options.body ? { "Content-Type": "application/json" } : {}), ...options.headers } });
+    const data = await response.json();
+    if (!response.ok) {
+      const e = new Error(data.error || "Room request failed");
+      e.fatal = [401, 403, 409].includes(response.status);
+      e.rejected = response.status >= 400 && response.status < 500 && response.status !== 429 && !e.fatal;
+      throw e;
+    }
+    return data;
+  };
+  const transmit = async () => {
+    if (!pending) return;
+    try {
+      const answer = await jsonFetch("/poker/api/command", { method: "POST", body: pending });
+      if (answer.accepted !== true) throw new Error("No acceptance receipt for the pending move");
+    }
+    catch (error) {
+      if (error.rejected) { pending = null; await persist(); revision = -1; }
+      throw error; // An uncertain response keeps the exact signed bytes for the next attempt/reload.
+    }
+    seq = JSON.parse(pending).seq; pending = null; revision = -1; await persist();
   };
   const command = async (op, data) => {
+    if (pending) throw new Error("Waiting for the previous signed move");
     const context = mirror?.state().context;
     const value = { table, signer: identity.publicKey, seq: seq + 1, op, data: { ...(context && !["join", "leave", "refill", "start"].includes(op) ? { hand: context.nonce, epoch: context.epoch } : {}), ...data } };
-    const request = { ...value, signature: await identity.sign("command", value) }, body = JSON.stringify(request);
-    for (let attempt = 0; ; attempt++) {
-      try { await jsonFetch("/poker/api/command", { method: "POST", body }); seq = value.seq; break; }
-      catch (error) { if (error.rejected || attempt >= 1) throw error; await new Promise(r => setTimeout(r, 800)); }
-    }
-    revision = -1;
+    pending = JSON.stringify({ ...value, signature: await identity.sign("command", value) });
+    await persist(); await transmit();
   };
   const progress = (label, done, total) => { if (done === total || done % 12 === 0) post("notice", { message: `${label} · ${Math.round(done / total * 100)}%` }); };
   const append = async audit => {
@@ -44,6 +69,7 @@
   };
   const acceptPacket = async packet => {
     if (packet.table !== table) return;
+    if (packet.instance !== instance) throw new Error("Poker service restarted; reload to start a new session");
     let canceled = false;
     const incoming = packet.audit?.offset === 0 ? packet.audit.events[0]?.request.data.nonce : mirror?.state().context?.nonce;
     if (mirror?.active && (!packet.audit || incoming !== mirror.state().context.nonce)) {
@@ -58,9 +84,12 @@
     else { mirror = null; record = null; }
     seq = packet.seq; revision = packet.revision; latest = packet;
     const s = mirror?.state(identity.publicKey);
+    if (mirror && (s.counters.find(([id]) => id === identity.publicKey)?.[1] || 0) !== seq) throw new Error("The relay disagreed with the verified command counter");
     if (s) {
       const own = s.state.seats.find(p => p?.id === identity.publicKey), plan = s.plan.holes.find(h => h?.id === identity.publicKey);
       if (own && plan && handKey && keyHand === s.context.nonce + ":" + s.context.epoch) {
+        const published = s.keys.find(([id]) => id === identity.publicKey)?.[1];
+        if (published && published !== handKey.publicKey) throw new Error("Recovered hand key does not match the public record");
         const maps = new Map(s.shares.map(([id, entries]) => [id, new Map(entries)]));
         const others = s.context.members.filter(m => m.id !== identity.publicKey);
         if (plan.positions.every(i => others.every(m => maps.get(m.id)?.has(i)))) {
@@ -70,8 +99,10 @@
       }
       packet.tables[table] = { table, phase: s.phase, revision: s.revision, state: s.state };
     }
+    if (!mirror?.active) { handKey?.dispose(); handKey = null; keyHand = ""; }
+    await persist();
     post("state", { packet: { tables: packet.tables, table, identity: identity.publicKey, deadline: packet.deadline,
-      fairness: { phase: s?.phase || "idle", checked: s?.shuffleAt || 0, total: s?.context?.members.length || 0, root: s?.root || "", exportable: !!record || !!lastRecord, complete: s?.phase === "complete" } } });
+      fairness: { phase: s?.phase || "idle", checked: s?.shuffleAt || 0, total: s?.context?.members.length || 0, root: s?.root || "", exportable: !!record || !!lastRecord, complete: s?.phase === "complete", recoverable: !!storage } } });
     if (canceled) post("notice", { message: "Hand canceled. Committed chips were refunded and missing players' seats released." });
   };
   const automatic = async () => {
@@ -80,10 +111,11 @@
     if (!s.context.members.some(m => m.id === id)) return false;
     const hand = s.context.nonce + ":" + s.context.epoch;
     if (s.phase === "keys" && !s.keys.some(([who]) => who === id)) {
-      if (keyHand !== hand) { handKey?.dispose(); handKey = C.player(); keyHand = hand; }
+      if (keyHand !== hand) { handKey?.dispose(); handKey = C.player(); keyHand = hand; await persist(); }
       await command("key", { key: handKey.publicKey, proof: await handKey.sign("hand-key", [s.context, id]) }); return true;
     }
     if (!handKey || keyHand !== hand) throw new Error("The private hand key is unavailable; this hand must be canceled");
+    if (s.keys.find(([who]) => who === id)?.[1] !== handKey.publicKey) throw new Error("Recovered key does not match this hand");
     if (s.phase === "shuffle" && s.context.members[s.shuffleAt].id === id) {
       post("notice", { message: "Shuffling encrypted cards…" });
       const shuffle = await C.shuffle(s.deck, s.aggregate, await mirror.shuffleContext(id), (n, total) => progress("Shuffling", n, total));
@@ -102,10 +134,14 @@
   };
   const act = async request => {
     const { name, value, expectedVersion } = request;
+    if (name === "forget") {
+      if (!storage || !latest || latest.tables.some(t => t.state.seats.some(p => p?.id === identity.publicKey))) throw new Error("Stand between hands before forgetting this device's recovery");
+      await storage.clear(); stop("Recovery cleared. Reload to connect again; allow 90 seconds for the old connection to expire."); return;
+    }
     if (name === "watch") {
       if (!Number.isInteger(value) || value < 0 || value >= 10) throw new Error("Invalid table");
       if (latest?.tables.some(t => t.table !== value && t.state.seats.some(p => p?.id === identity.publicKey))) throw new Error("Stand before switching tables");
-      table = value; mirror = null; record = null; seq = 0; revision = -1; return;
+      table = value; mirror = null; record = null; seq = 0; revision = -1; latest = null; await persist(); return;
     }
     if (name === "verify") {
       const audit = value || record || lastRecord; if (!audit) throw new Error("No hand record yet");
@@ -113,7 +149,7 @@
       post("notice", { message: verified.phase === "complete" ? "Hand record verified. Folded cards remain private." : `Valid record so far · ${verified.phase}. This is not a completed-hand certificate.` }); return;
     }
     if (name === "export") { const audit = record || lastRecord; if (!audit) throw new Error("No hand record yet"); post("record", { record: audit }); return; }
-    if (name === "join" || name === "seat") await command("join", { name: value?.name || "Ooga", seat: name === "seat" ? value?.seat ?? -1 : -1 });
+    if (name === "join" || name === "seat") await command("join", { name: display || value?.name || "Ooga", seat: name === "seat" ? value?.seat ?? -1 : -1 });
     else if (name === "stand") await command("leave", {});
     else if (name === "refill") await command("refill", {});
     else if (name === "start") await command("start", { nonce: C.nonce() });
@@ -126,14 +162,25 @@
   const loop = async () => {
     while (running && !fatal) {
       try {
-        if (actions.length) { const request = actions.shift(); try { await act(request); } catch (e) { post("notice", { message: e.message }); } revision = -1; }
+        if (pending) {
+          try { await transmit(); }
+          catch (error) { if (!error.rejected) throw error; post("notice", { message: error.message }); }
+        }
         const from = record?.events.length || 0, hand = mirror?.state().context?.nonce || "";
         controller = new AbortController();
-        const packet = await jsonFetch(`/poker/api/state?table=${table}&from=${from}&hand=${encodeURIComponent(hand)}&after=${revision}`, { signal: controller.signal });
+        const packet = await jsonFetch(`/poker/api/state?table=${table}&from=${from}&hand=${encodeURIComponent(hand)}&after=${actions.length ? -1 : revision}`, { signal: controller.signal });
         controller = null;
-        try { await acceptPacket(packet); } catch (error) { fatal = true; post("fatal", { message: "Verification stopped: " + error.message }); break; }
-        try { if (await automatic()) revision = -1; } catch (error) { post("notice", { message: error.message }); }
+        try { await acceptPacket(packet); } catch (error) { stop("Verification stopped: " + error.message); break; }
+        if (actions.length) {
+          try { await act(actions.shift()); }
+          catch (error) { if (error.fatal || pending) throw error; post("notice", { message: error.message }); }
+          revision = -1; continue; // Refresh the verified state before generating a protocol contribution.
+        }
+        try { if (await automatic()) revision = -1; }
+        catch (error) { if (error.fatal || pending) throw error; post("notice", { message: error.message }); }
       } catch (error) {
+        controller = null;
+        if (error.fatal) { stop(error.message); break; }
         if (error.name === "AbortError") continue;
         post("notice", { message: "Connection interrupted. Reconnecting; secret keys stay on this device." });
         await new Promise(resolve => setTimeout(resolve, 1500)); revision = -1;
@@ -142,12 +189,36 @@
   };
   self.onmessage = async event => {
     const request = event.data;
-    if (request?.type === "connect" && !running) {
+    if (request?.type === "connect" && !running && !connecting && !fatal) {
+      connecting = true;
       try {
-        C.ready(); identity = C.player(); const nonce = C.nonce();
+        C.ready();
+        const health = await jsonFetch("/poker/api/health");
+        if (health.protocol !== C.DOMAIN || !/^[0-9a-f]{64}$/.test(health.instance)) throw new Error("Unexpected poker service");
+        if (request.account !== undefined && health.account !== request.account) throw new Error("Account changed while connecting; reload and try again");
+        instance = health.instance; account = health.account; table = request.table || 0;
+        let saved = null;
+        if (account) { storage = await self.BL.pokerRecovery.open(account); saved = await storage.load(); }
+        if (saved && (saved.version !== 1 || !Number.isInteger(saved.table) || saved.table < 0 || saved.table >= 10 || !Number.isSafeInteger(saved.seq) || saved.seq < 0)) throw new Error("Invalid recovery checkpoint");
+        identity = C.player(saved?.identity ?? null);
+        if (saved && identity.publicKey !== saved.publicKey) throw new Error("Recovered identity does not match");
+        if (saved?.instance === instance) {
+          table = saved.table; seq = saved.seq; keyHand = saved.keyHand; record = saved.record; lastRecord = saved.lastRecord; pending = saved.pending;
+          if (saved.hand) handKey = C.player(saved.hand);
+          if (record) { if (record.table !== table) throw new Error("Wrong recovered table"); mirror = await M.replay(record); }
+          if (pending) {
+            const { signature, ...value } = JSON.parse(pending);
+            if (value.signer !== identity.publicKey || value.table !== table || value.seq !== seq + 1 || !await C.signatureValid(identity.publicKey, "command", value, signature)) throw new Error("Invalid saved move");
+          }
+        } else if (saved) post("notice", { message: "Poker service restarted. Its previous hands and free-chip balances ended; starting a new session." });
+        await persist(); // The signing key must survive a reload before it is registered remotely.
+        const nonce = C.nonce();
         const answer = await jsonFetch("/poker/api/session", { method: "POST", body: JSON.stringify({ publicKey: identity.publicKey, nonce, signature: await identity.sign("connect", nonce) }) });
-        token = answer.token; running = true; table = request.table || 0; post("connected", { identity: identity.publicKey }); loop();
-      } catch (error) { post("fatal", { message: error.message }); }
+        if (answer.instance !== instance || answer.account !== account || answer.publicKey !== identity.publicKey) throw new Error("Poker session changed while connecting; reload");
+        token = answer.token; display = answer.display; running = true; post("connected", { identity: identity.publicKey, table }); loop();
+        if (storage) post("notice", { message: "Recovery saved on this device. Reload and reconnect before the 90-second hand deadline." });
+      } catch (error) { stop(error.message); }
+      finally { connecting = false; }
     } else if (request?.type === "action" && running && !fatal) {
       if (actions.length >= 4) { post("notice", { message: "Please wait for your previous action" }); return; }
       actions.push(request); controller?.abort();

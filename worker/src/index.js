@@ -8,6 +8,7 @@ import { handleAuth } from "./auth.js";
 import { purgeExpiredSessions } from "./db.js";
 import { allowed, fromSite, getSessionFromRequest, text } from "./http.js";
 import { contributorFor } from "./contributor-access.js";
+import { handlePoker } from "./poker.js";
 
 export { Room } from "./room.js";
 
@@ -44,6 +45,7 @@ const handleVoice = async (request, env, url) => {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname.startsWith("/poker/")) return handlePoker(request, env);
     if (url.pathname.startsWith("/auth/")) return handleAuth(request, env, url);
     if (url.pathname.startsWith("/api/voice/")) return handleVoice(request, env, url);
     if (url.pathname.startsWith("/api/")) return handleApi(request, env, url);

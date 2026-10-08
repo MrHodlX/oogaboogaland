@@ -24,16 +24,13 @@ machine demonstrate functionality, not independent trust domains.
 **Walk the floor** allows walking without disconnecting a seated player. Stay
 connected after folding to help open community cards. Stand between hands before
 exiting. Spectators receive no private hole cards. Seated avatars show occupancy;
-shared walking positions and proximity voice are not implemented.
+the hosted Ooga floor also shares walking positions and table voice. The standalone Node demo does not provide Ooga login or voice.
 
 Each required protocol contribution or betting turn has a 90-second deadline
 from the last accepted table event. A repeated request does not reset it.
 A timeout cancels the hand, refunds committed chips, and releases missing
 contributors' seats. They have a 60-second start/join cooldown. Canceled public
-records remain available during reconnect. No secret key is requested for
-recovery. A temporary network interruption retries with in-memory keys;
-refreshing, closing the tab or losing the worker loses those keys and may cancel
-the hand. Sessions and play-chip balances reset when the service restarts.
+records remain available during reconnect. No secret key is sent to the relay for recovery. Signed-in hosted play saves encrypted recovery on the same device and replays the public record after reconnecting; anonymous localhost sessions keep keys in memory and lose them on reload. Recovery must still finish before the deadline. Sessions and play-chip balances reset when the service restarts.
 
 **Quick Play** remains local practice when disconnected. Its local shuffle has
 no distributed fairness certificate. The standalone HTML opens practice mode;
@@ -41,30 +38,14 @@ shared play requires the service.
 
 ## Hosting and team integration
 
-The service binds to loopback by default. For a reviewed deployment, put it behind
-an HTTPS reverse proxy and set its exact public origin:
+The service binds to loopback by default for the anonymous local demo. The
+Cloudflare site has an optional authenticated same-origin gateway, enabled only
+when a Node service URL and shared secret are configured. See
+[poker-integration.md](poker-integration.md) for staging setup, account binding,
+encrypted browser checkpoints, table voice, failure handling and remaining
+validation. The Node process is still a single in-memory relay; service restarts
+reset tables and balances. Static GitHub Pages alone cannot execute it.
 
-```sh
-POKER_HOST=0.0.0.0 POKER_PORT=8787 POKER_ORIGIN=https://poker.example.org node server/poker/server.mjs
-```
-
-This is POSIX environment-variable syntax. Set the same variables in the Windows
-environment or hosting dashboard when appropriate. Non-loopback listening
-requires an explicit origin. Remote browsers require HTTPS for cryptography.
-The implementation needs independent review before untrusted public deployment.
-
-Static GitHub Pages cannot execute this Node service. Serve the built page here,
-or route `/poker/api/*` and `/poker/worker.js` on the page's origin to the service.
-The worker is served from the same reviewed source tree. No cross-origin endpoint
-setting, CORS wildcard, external script, dependency or payment service is used.
-
-`createPokerServer` in `server/poker/server.mjs` exposes the server for the team's
-host. Connect the team's authenticated identity at the session boundary before
-claiming persistent accounts. Current identifiers are anonymous session public
-keys, not GitHub accounts. Session caps, body-size limits, per-session throttling,
-strict origins, signed commands, one-seat checks and serialized table queues are
-included. Internet-scale denial-of-service protection, durable sessions,
-horizontal scaling, moderation and voice remain deployment/integration work.
 
 ## Protocol
 
@@ -171,7 +152,7 @@ Obtain the verifier from a trusted source instead of relying solely on the host'
 - Review point/scalar validation, encoding, OR-proof composition, roster and
   acknowledgment binding, key lifecycle, replay resistance, worker delivery and
   HTTP resource limits before deployment. Load-test ten simultaneous full tables
-  on actual target devices. This has not been demonstrated for 120 live humans.
+  on actual target devices. The shared room currently caps presence at 32 players. Ten nine-seat tables have not been load-tested for 90 live players plus spectators.
 
 ## Source and validation
 
@@ -180,6 +161,8 @@ Obtain the verifier from a trusted source instead of relying solely on the host'
 | `src/js/poker-crypto.js` | Group math, signatures, switch routing and shuffle/share proofs. |
 | `src/js/poker-match.js` | Public state machine, signed record and replay. |
 | `src/js/poker-rules.js` | Local rules and sealed-position rules with exact refunds. |
+| `src/js/poker-recovery.js` | Account-scoped encrypted checkpoints and exclusive browser ownership. |
+| `worker/src/poker.js` | Authenticated same-origin gateway to the optional service. |
 | `src/js/poker-worker.js` | Private keys, transport, verification and authorized shares. |
 | `src/js/poker-live.js` | Main-thread worker bridge and views. |
 | `server/poker/server.mjs` | Service, long polling, queues, deadlines and limits. |
@@ -196,8 +179,10 @@ nine-party encrypted hand with side pots and a fold, reject tampered proofs
 and premature private shares, replay the public record, run actual worker code
 over HTTP, and check timeout/replay/origin/identity boundaries.
 
-The combined run passed 124/124 checks; the final focused protocol run passed
-5/5 after disconnect cleanup. Both completed in about two minutes here.
+Historical validation of the original protocol reported 124/124 combined checks
+and 5/5 focused checks. Those results predate the account/recovery integration
+and are not validation of this change. See its integration notes for current
+validation and deferred play-tests.
 
 The existing browser-test STOP remains in force. No Chrome test was retried.
 Node worker/HTTP checks are not a browser UI test. See the delivery manifest for
