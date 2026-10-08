@@ -12,6 +12,11 @@ The existing ten-table floor and five cave themes remain. Read
 [poker-protocol.md](poker-protocol.md) for the protocol, service commands,
 security assumptions and hosting requirements.
 
+The current interface revision adds a filtered table browser, a clearer betting
+dock and live connection feedback. See [poker-interface.md](poker-interface.md)
+for the interaction changes and remaining play-tests, and
+[poker-integration.md](poker-integration.md) for signed-in deployment and recovery.
+
 Browser playthrough, fallback rendering, touch layout, audio, automatic hand
 progression, the theme picker and visual appearance, scene round trips, and the
 changed hub entry remain unverified:
@@ -43,8 +48,8 @@ it shows a picture of the room. The same Ooga appears directly in the room,
 without a title card or transition animation. The return mirror brings them
 back to ₿IFRÖST, in front of that window.
 
-**Quick Play** takes a free seat, adds enough computer opponents for four
-players and deals. Or choose any of the ten lobby rows, take a specific seat,
+**Play a practice hand** takes a free seat, adds enough computer opponents for four
+players and deals. Or choose any of the ten lobby table cards, take a specific seat,
 add three bots at a time, and deal when ready. You can also run a bots-only table
 while spectating. Every table has nine player seats plus a suited gorilla
 dealer. Two funded seats suffice; there is no table owner or privileged host.
@@ -62,13 +67,15 @@ the current betting round**. Min, half-pot, three-quarter-pot, pot and all-in
 presets only select an amount: they never submit a bet. A pot raise includes the
 call before sizing the raise. The rules still enforce minimums, all-in caps and
 raise rights. Submitted UI actions carry the displayed table version so a stale
-click is rejected. There is no time limit on the human's turn in this practice
-build.
+click is rejected. The sizing helper also shows the additional chips and your
+remaining stack. Live actions stay disabled until their own request is
+acknowledged in a refreshed, verified state. There is no time limit on the
+human's turn in practice.
 
 Auto deal defaults on and waits at least five seconds after settlement. It
 refills busted computer seats for free between hands. A busted human stops the
 loop and chooses a free refill explicitly. Auto deal can be disabled per table;
-Pause demo pauses all local tables. Optional synthesized deal/turn/win sounds
+Pause practice pauses all local tables. Optional synthesized deal/turn/win sounds
 start only after opting in, with no audio downloads. The history keeps the last
 twelve completed public hand summaries per table during this floor visit; it
 never archives a player's private or folded cards. Card motion respects the
@@ -81,12 +88,16 @@ tabletop hole cards are identical backs; walking behind a seat reveals nothing.
 A spectator can watch the focused view, return to walking, and select another
 table. Taking a second seat requires leaving the first.
 
-**Stand / walk** or **Walk the floor** during a hand moves a seated visitor into
-the aisle immediately. Their remaining turns automatically check when free and
-fold when facing a bet; their seat releases after settlement. Already all-in
-chips remain eligible. Escape returns from the focused view to the floor, then
-leaves through the return mirror to ₿IFRÖST. Leaving the scene pauses its local tables; returning
-resumes them. Reloading resets the session-only chips.
+**Walk the floor** moves a seated visitor into the aisle while keeping their
+seat and normal turns. The lobby's **Your seat** button returns to the table;
+it shows when it is time to act. Walking does not check or fold for you.
+**Leave seat** is a separate control under Table options. During a practice
+hand it checks when free and folds when facing a bet, then releases the seat
+after settlement. Already all-in chips remain eligible. Live seats can leave
+only between hands. Escape closes the focused view; a second Escape while
+seated requests leaving the seat. Unseated visitors can return through the
+mirror to ₿IFRÖST. Leaving the scene pauses its local tables; returning resumes
+them. Reloading resets practice chips.
 
 ## Visual revision: Gatsby meets Ooga Booga Land
 
@@ -111,7 +122,8 @@ browser-test stop instruction below.
 
 ## Cave themes
 
-Choose **Cave theme** in the floor lobby or below the playing controls. The lobby
+Choose **Cave theme** under the lobby's **Room style & connection options** or
+the table's **Room style** section. The lobby
 also offers five visual swatches. A theme changes the whole local room's stone,
 chairs, felt, architectural details and lighting together with the poker HUD.
 The original Banana Club remains the default.
@@ -161,7 +173,7 @@ geometry, particles or allocations were introduced by theme switching.
   does not reopen a player's raise rights unless cumulative action faced reaches
   a full raise. No betting into an uncontested dry side pot.
 - Refills are free between hands when below 1,000. Auto deal refills busted bots;
-  a busted human must choose a refill. Quick Play refills the visitor for free.
+  a busted human must choose a refill. Play a practice hand refills the visitor for free.
 - These bananas are disposable play points, separate from the world's donation
   bananas. No purchase, cash value, player transfers, prizes or redemption.
 - No Spark, wallet, payment processing, cash conversion, or outside-settlement
@@ -204,10 +216,10 @@ hole cards locally. Clients cannot select a remote snapshot viewer ID.
 
 The service includes seat reservations, signed commands, per-table queues,
 version/idempotency checks, deadlines, refunds and basic request limits.
-Persistent accounts/storage, shared walking positions, proximity voice,
-deployment and production hardening remain integration work. Upstream was also
-inspected at `05a7b72fadd756d5c750ec368320bbd013d9d9bf`; its additional routing
-and geometry helpers do not include a shared poker backend.
+The integration branch adds account binding, encrypted browser recovery, shared
+walking presence and table/floor voice; see [poker-integration.md](poker-integration.md).
+Durable server storage, deployment, production hardening and capacity beyond
+the existing 32-person shared room remain separate work.
 
 The new protocol uses proofs without publishing whole-deck seeds or private
 keys. Folded-card privacy depends on the assumptions in the protocol document.

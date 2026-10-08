@@ -1336,71 +1336,78 @@
     </dialog>
     <div id="poker" data-scene="poker" hidden>
       <aside class="poker-panel fold-panel fold-right" id="poker-panel" aria-label="The Ember Den lobby">
-        <div class="panel-head"><h3>The Ember Den</h3><button class="panel-fold" type="button" data-fold="poker-panel" aria-label="Fold Ember Den lobby">−</button></div>
-        <p class="poker-tagline">THE UNDERGROUND BANANA CLUB</p>
-        <p>Ten stone tables. Nine seats each.<br>One very well-dressed dealer.</p>
-        <div class="poker-theme-picker">
-          <label>Cave theme <select data-poker-theme-select aria-label="Poker floor theme"></select></label>
-          <div class="poker-theme-choices" data-poker="theme-choices" aria-label="Choose a cave theme"></div>
-          <p data-poker="theme-description"></p>
+        <div class="panel-head"><div><p class="poker-kicker">THE UNDERGROUND BANANA CLUB</p><h3>The Ember Den</h3></div><button class="panel-fold" type="button" data-fold="poker-panel" aria-label="Fold Ember Den lobby">−</button></div>
+        <p class="poker-welcome">Good cards.<br><em>Great company.</em></p>
+        <p class="poker-tagline">Ten stone tables. Nine seats each.<br>Free chips. Suited gorillas. Stay a while.</p>
+        <div class="poker-mode-picker" aria-label="Choose how to play">
+          <button class="poker-primary" type="button" data-poker-action="quick"><span>Play a practice hand</span><small>Take a seat with computer opponents</small></button>
+          <button type="button" data-poker="connect" data-poker-action="connect"><span>Join live tables</span><small>Play with people · Ooga sign-in</small></button>
+          <button type="button" data-poker="practice" data-poker-action="practice" hidden>Back to practice</button>
+          <button type="button" data-poker="reconnect-floor" data-poker-action="reconnect" hidden>Reconnect to live tables</button>
         </div>
-        <button class="poker-primary poker-quick" type="button" data-poker-action="quick">Quick Play <small>Free chips · computer opponents</small></button>
-        <div class="poker-live-join"><label>Table name <input data-poker="nickname" maxlength="32" value="Ooga" autocomplete="off" aria-label="Your name at the poker table"></label><button type="button" data-poker="connect" data-poker-action="connect">Connect to live tables</button><button type="button" data-poker="practice" data-poker-action="practice" hidden>Back to local practice</button><button type="button" data-poker="forget" data-poker-action="forget" hidden>Forget recovery on this device</button><small data-poker="live-label">Signed-in live tables use your Ooga name and save encrypted recovery on this device.</small></div>
-        <div class="poker-lobby-head"><span>NO-LIMIT HOLD’EM</span><span>BLINDS 5 / 10</span></div>
+        <p class="poker-mode-note" data-poker="live-label">Practice is ready now. Live tables need a connected poker service.</p>
+        <button type="button" class="poker-return" data-poker="return" data-poker-action="return" hidden><span data-poker="return-label">Back to your table</span><small data-poker="floor-turn"></small></button>
+        <div class="poker-lobby-head"><h4>Find your table</h4><span data-poker="lobby-count">10 tables</span></div>
+        <div class="poker-filters" role="group" aria-label="Filter tables"><button type="button" data-poker-filter="all" aria-pressed="true">All tables</button><button type="button" data-poker-filter="open" aria-pressed="false">Open seats</button><button type="button" data-poker-filter="playing" aria-pressed="false">In play</button></div>
         <div class="poker-tables" data-poker="tables" aria-label="Ten poker tables"></div>
-        <p class="poker-notice" data-poker="floor-notice" role="status"></p>
-        <p class="poker-help" data-coarse="Walk with the sticks. Tap a table to watch.">WASD to walk · drag to look · click a table to watch</p>
-        <button type="button" data-poker-action="exit">Return through ₿IFRÖST mirror</button>
+        <p class="poker-empty-list" data-poker="empty-list" hidden>No tables match. Try All tables.</p>
+        <details class="poker-lobby-options"><summary>Room style &amp; connection options</summary>
+          <div class="poker-theme-picker"><label>Cave theme <select data-poker-theme-select aria-label="Poker floor theme"></select></label><div class="poker-theme-choices" data-poker="theme-choices" aria-label="Choose a cave theme"></div><p data-poker="theme-description"></p></div>
+          <label class="poker-nickname">Local service name <input data-poker="nickname" maxlength="32" value="Ooga" autocomplete="off"></label>
+          <p>Signed-in tables use your Ooga name. Recovery is saved on this device.</p>
+          <button type="button" data-poker="forget" data-poker-action="forget" hidden>Forget recovery on this device</button>
+        </details>
+        <p class="poker-notice" data-poker="floor-notice" role="status" aria-live="polite"></p>
+        <p class="poker-help" data-coarse="Move with the sticks. Tap a table to watch.">WASD to explore · click a table to watch</p>
+        <button class="poker-exit" type="button" data-poker-action="exit">Return to ₿IFRÖST</button>
       </aside>
-      <button class="panel-edge" type="button" data-fold="poker-panel">Poker tables</button>
+      <button class="panel-edge" type="button" data-fold="poker-panel">Tables</button>
       <section class="poker-focus" data-poker="focus" hidden aria-label="Poker table">
         <header class="poker-table-head">
-          <div><p class="poker-kicker" data-poker="theme-name">THE BANANA CLUB</p><h3 data-poker="title" tabindex="-1">Table 01</h3><p data-poker="status"></p></div>
-          <div class="poker-table-tools"><span class="poker-free">FREE PLAY</span><button type="button" data-poker-action="walk">Walk the floor</button><button type="button" data-poker="pause" data-poker-action="pause" aria-pressed="false">Pause demo</button></div>
+          <div><p class="poker-kicker">THE EMBER DEN <span aria-hidden="true">/</span> <span data-poker="theme-name">THE BANANA CLUB</span></p><div class="poker-table-title"><h3 data-poker="title" tabindex="-1">Table 01</h3><span class="poker-mode-badge" data-poker="mode-badge">PRACTICE</span></div><p data-poker="status">No-limit Hold’em · blinds 5 / 10</p></div>
+          <div class="poker-table-tools"><span class="poker-free">FREE PLAY</span><label class="poker-table-switch">Table <select data-poker="table-select" aria-label="Watch another table"></select></label><button type="button" data-poker-action="walk">Walk the floor</button></div>
         </header>
-        <div class="poker-arena" aria-label="Nine-seat poker table">
-          <div class="poker-felt" aria-hidden="true"></div>
-          <div class="poker-center">
-            <div class="poker-dealer" aria-label="Suited gorilla dealer">
-              <svg viewBox="0 0 80 80" aria-hidden="true"><path fill="#161f20" d="M6 78V62Q9 49 29 49H51Q71 49 74 62V78Z"/><path fill="#faf0d1" d="M28 49H52L44 78H36Z"/><path fill="#cda75d" d="M35 53L40 57L45 53L43 50H37ZM38 58H42L45 70L40 75L35 70Z"/><path fill="#394542" d="M27 49L15 60L26 62L23 67L36 78ZM53 49L65 60L54 62L57 67L44 78Z"/><path fill="#27332e" d="M17 20L22 10L32 4H48L58 10L63 20V41L53 51H27L17 41Z"/><path fill="#898b73" d="M23 20L32 17L40 21L48 17L57 20V32L60 38L52 46H28L20 38L23 32Z"/><path fill="#18251e" d="M25 23H36V28H25ZM44 23H55V28H44ZM34 31H46L48 36H32ZM30 40H50V42H30Z"/><path fill="#d9bc7b" d="M27 24H30V26H27ZM47 24H50V26H47Z"/></svg>
-              <span>GORILLA DEALER</span>
-            </div>
-            <p class="poker-pot"><span data-poker="pot-label">TOTAL POT</span><strong data-poker="pot">0</strong><small>banana chips</small></p>
-            <div class="poker-board" data-poker="board" aria-label="Community cards"></div>
-            <p class="poker-street" data-poker="street"></p>
-          </div>
-          <div class="poker-seats" aria-label="Player seats"></div>
-        </div>
-        <div class="poker-result" data-poker="result" role="status" hidden></div>
-        <div class="poker-dock">
-          <div class="poker-private"><div class="poker-hand" data-poker="hand" aria-label="Your private cards"></div><p data-poker="balance"></p><small data-poker="hand-name"></small></div>
-          <div class="poker-decision">
-            <p class="poker-turn" data-poker="turn" role="status"></p>
-            <div data-poker="controls" hidden>
-              <div class="poker-sizing">
-                <div class="poker-presets" aria-label="Bet size presets"><button type="button" data-poker-size="min">Min</button><button type="button" data-poker-size="half">½ pot</button><button type="button" data-poker-size="threeQuarter">¾ pot</button><button type="button" data-poker-size="pot">Pot</button><button type="button" data-poker-size="all">All in</button></div>
-                <label class="poker-amount"><span data-poker="range">Raise to</span><input data-poker="amount" type="number" inputmode="numeric" step="1" aria-label="Total bet for this betting round"></label>
-                <input data-poker="slider" type="range" step="1" aria-label="Choose a total bet size">
+        <div class="poker-status-strip"><span class="poker-connection" data-poker="connection">Practice · on your device</span><span data-poker="voice-label">Table voice</span><span class="poker-timer" data-poker="countdown" aria-label="Hand timing"></span><button type="button" data-poker="reconnect" data-poker-action="reconnect" hidden>Reconnect</button></div>
+        <div class="poker-table-layout">
+          <div class="poker-play">
+            <div class="poker-arena" aria-label="Nine-seat poker table">
+              <div class="poker-felt" aria-hidden="true"></div>
+              <div class="poker-center">
+                <div class="poker-dealer" aria-label="Suited gorilla dealer"><svg viewBox="0 0 80 80" aria-hidden="true"><path fill="#161f20" d="M6 78V62Q9 49 29 49H51Q71 49 74 62V78Z"/><path fill="#faf0d1" d="M28 49H52L44 78H36Z"/><path fill="#cda75d" d="M35 53L40 57L45 53L43 50H37ZM38 58H42L45 70L40 75L35 70Z"/><path fill="#394542" d="M27 49L15 60L26 62L23 67L36 78ZM53 49L65 60L54 62L57 67L44 78Z"/><path fill="#27332e" d="M17 20L22 10L32 4H48L58 10L63 20V41L53 51H27L17 41Z"/><path fill="#898b73" d="M23 20L32 17L40 21L48 17L57 20V32L60 38L52 46H28L20 38L23 32Z"/><path fill="#18251e" d="M25 23H36V28H25ZM44 23H55V28H44ZM34 31H46L48 36H32ZM30 40H50V42H30Z"/><path fill="#d9bc7b" d="M27 24H30V26H27ZM47 24H50V26H47Z"/></svg><span>THE HOUSE GORILLA</span></div>
+                <p class="poker-pot"><span data-poker="pot-label">TOTAL POT</span><strong data-poker="pot">0</strong><small>banana chips</small></p>
+                <div class="poker-board" data-poker="board" aria-label="Community cards"></div>
+                <p class="poker-street" data-poker="street"></p>
               </div>
-              <div class="poker-actions"><button type="button" data-poker-action="fold">Fold</button><button type="button" data-poker="call" data-poker-action="call">Check</button><button class="poker-primary" type="button" data-poker="raise" data-poker-action="raise">Raise to 20</button></div>
+              <div class="poker-seats" aria-label="Player seats"></div>
             </div>
-            <div class="poker-buttons" data-poker="setup">
-              <button class="poker-primary" type="button" data-poker="join" data-poker-action="join">Take a seat</button>
-              <button type="button" data-poker="bots" data-poker-action="bots">Add 3 bots</button>
-              <button type="button" data-poker="start" data-poker-action="start">Deal hand</button>
-              <button class="poker-primary" type="button" data-poker="refill" data-poker-action="refill" hidden>Free refill to 1,000</button>
+            <div class="poker-result" data-poker="result" role="status" hidden></div>
+            <div class="poker-dock">
+              <div class="poker-private"><span class="poker-private-label" data-poker="private-label">YOUR HAND</span><div class="poker-hand" data-poker="hand" aria-label="Your private cards"></div><p data-poker="balance"></p><small data-poker="hand-name"></small></div>
+              <div class="poker-decision">
+                <p class="poker-turn" data-poker="turn" role="status" aria-live="polite"></p><p class="poker-turn-help" data-poker="turn-help"></p>
+                <div data-poker="controls" role="group" aria-label="Betting actions" hidden>
+                  <div class="poker-actions"><button type="button" data-poker="fold" data-poker-action="fold">Fold</button><button type="button" data-poker="call" data-poker-action="call">Check</button><button class="poker-primary" type="button" data-poker="raise" data-poker-action="raise">Raise</button></div>
+                  <div class="poker-sizing"><div class="poker-presets" role="group" aria-label="Choose a bet size"><button type="button" data-poker-size="min">Min</button><button type="button" data-poker-size="half">½ pot</button><button type="button" data-poker-size="threeQuarter">¾ pot</button><button type="button" data-poker-size="pot">Pot</button><button type="button" data-poker-size="all">All in</button></div><label class="poker-amount"><span data-poker="range">Raise to</span><input data-poker="amount" type="number" min="0" step="1" inputmode="numeric" aria-describedby="poker-bet-help"></label><input data-poker="slider" type="range" min="0" max="1000" step="1" aria-label="Bet total for this round" aria-describedby="poker-bet-help"></div>
+                  <p class="poker-bet-help" id="poker-bet-help" data-poker="bet-help">Choose a size, then press Bet or Raise to send it.</p>
+                </div>
+                <div class="poker-setup" data-poker="setup"><div class="poker-buttons"><button class="poker-primary" type="button" data-poker="join" data-poker-action="join">Take a seat</button><button class="poker-primary" type="button" data-poker="start" data-poker-action="start">Deal hand</button><button type="button" data-poker="bots" data-poker-action="bots">Add 3 bots</button><button type="button" data-poker="refill" data-poker-action="refill" hidden>Get 1,000 free chips</button></div></div>
+                <p class="poker-notice" data-poker="notice" role="status" aria-live="polite"></p>
+              </div>
             </div>
-            <p class="poker-countdown" data-poker="countdown"></p>
           </div>
+          <aside class="poker-rail" aria-label="Table information and options">
+            <div class="poker-rail-title"><span class="poker-kicker">AT THE TABLE</span><span data-poker="seat-count">0 / 9</span></div>
+            <dl class="poker-table-facts"><div><dt>Blinds</dt><dd>5 / 10</dd></div><div><dt>Starting stack</dt><dd>1,000</dd></div><div><dt>Hand</dt><dd data-poker="hand-number">—</dd></div></dl>
+            <div class="poker-activity"><h4>This hand</h4><div class="poker-log" data-poker="log" aria-label="Public action history">Take a seat to get started.</div></div>
+            <div class="poker-table-footer">
+              <details open><summary>Table options</summary><div class="poker-preferences"><label><input type="checkbox" data-poker-option="auto" checked>Auto deal in practice</label><label><input type="checkbox" data-poker-option="sound">Table sounds</label></div><div class="poker-buttons"><button type="button" data-poker="pause" data-poker-action="pause" aria-pressed="false">Pause practice</button><button type="button" data-poker="stand" data-poker-action="stand" hidden>Leave seat</button></div></details>
+              <details><summary>Room style</summary><label class="poker-theme-inline">Cave theme <select data-poker-theme-select aria-label="Table theme"></select></label><p class="poker-theme-note" data-poker="theme-note"></p></details>
+              <details class="poker-history"><summary>Recent hands</summary><ol data-poker="history"></ol></details>
+              <details class="poker-fairness" data-poker="fairness" hidden><summary>Shuffle &amp; hand verification</summary><p data-poker="fair-status"></p><p class="poker-proof-root" data-poker="proof-root"></p><div class="poker-buttons"><button type="button" data-poker="verify" data-poker-action="verify">Verify hand</button><button type="button" data-poker="export" data-poker-action="export">Download record</button></div><label>Check a saved record <input type="file" data-poker="audit-file" accept=".json,application/json"></label><p>Experimental, unaudited protocol. Proof checks cannot rule out collusion, compromised devices or deliberate disconnections. Folded cards stay private.</p></details>
+              <details class="poker-rules"><summary>How to play</summary><p>Make the best five-card hand from your two private cards and the five community cards. Check when no bet is owed, call to match, raise to increase the bet, or fold to leave this hand.</p><p>The bet amount is your total for this round. Presets only choose an amount. All-ins create side pots; ties split pots. Banana chips are free, have no cash value and cannot be bought, transferred or redeemed. No rake.</p><p>Walk the floor keeps your seat. Return to the table to act. In practice, Leave seat during a hand checks or folds your remaining turns and releases the seat afterward. Live players must stay connected after folding and leave between hands.</p><p>Live contributions and betting turns have a 90-second deadline. If it expires, the hand cancels and committed chips return. Signed-in recovery works on the same browser and device: reconnect before the deadline. Anonymous local-service keys are lost on reload. Use Forget recovery after standing to remove saved keys.</p><p>Voice follows the table you watch. Walking returns to floor voice. Spectators can join table conversations; private cards remain hidden.</p></details>
+            </div>
+          </aside>
         </div>
-        <footer class="poker-table-footer">
-          <label class="poker-theme-inline">Cave theme <select data-poker-theme-select aria-label="Poker table theme"></select><span data-poker="theme-note">Ivory stone and emerald felt</span></label>
-          <div class="poker-preferences"><label><input type="checkbox" data-poker-option="auto" checked>Auto deal</label><label><input type="checkbox" data-poker-option="sound">Sound</label><button type="button" data-poker="stand" data-poker-action="stand" hidden>Stand / walk</button></div>
-          <p class="poker-notice" data-poker="notice" role="status"></p>
-          <details class="poker-fairness" data-poker="fairness" hidden><summary>Shuffle &amp; hand verification</summary><p data-poker="fair-status" role="status">Waiting for a shared hand.</p><p class="poker-proof-root" data-poker="proof-root"></p><div class="poker-buttons"><button type="button" data-poker="verify" data-poker-action="verify">Verify hand</button><button type="button" data-poker="export" data-poker-action="export">Download hand record</button></div><label>Check a saved record <input type="file" data-poker="audit-file" accept=".json,application/json"></label><p>Experimental protocol. Your browser checks the encrypted shuffle and allowed card openings. Folded cards are not published. Verification cannot rule out collusion, compromised devices or deliberate disconnections.</p></details>
-          <details class="poker-history"><summary>Hand history &amp; action log</summary><p class="poker-log" data-poker="log"></p><ol data-poker="history"></ol></details>
-          <details class="poker-rules"><summary>Rules &amp; shuffle</summary><p>No-limit Texas Hold’em · blinds 5/10 · 1,000 free banana chips · no rake. Raise sizes are your total for this betting round. All-ins create side pots; ties split pots. A sizing preset only fills the input; press Bet or Raise to submit.</p><p>Session-only chips have no cash value, purchase, transfer or redemption. They are separate from donation bananas. Local practice has computer opponents, optional auto deal and no turn deadline.</p><p>Live tables have human players and an experimental encrypted shuffle checked by every browser. Stay connected through the hand, even after folding. If a required contribution or action does not arrive within 90 seconds of the last table event, the hand cancels and all committed chips return. Signed-in live play saves encrypted recovery keys on this device. After a reload, reconnect with the same account and browser before the deadline. Keep only one live poker tab open. Stand first, then use Forget recovery to remove the saved keys. Anonymous local service sessions do not survive a reload. Stand between hands before leaving the room.</p><p>Voice follows the table you are watching, including spectators. Walk the floor to return to floor voice. Everyone stays visible on the shared floor. Enable voice with the usual microphone control.</p><p>Local practice uses Web Crypto and Fisher–Yates; its hands have no independent proof. Spectators see community and public showdown cards only.</p></details>
-        </footer>
       </section>
       <section class="race-results game-intro" data-intro="poker" hidden aria-label="Welcome to The Ember Den">
         <p class="game-intro-kicker">The underground banana club</p>

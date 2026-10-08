@@ -2,8 +2,9 @@
 
 This change connects the existing ten-table, nine-seat poker floor to Ooga's
 GitHub login and room voice. It adds browser recovery to the existing encrypted
-deck protocol. It does not change that shuffle, add payments or copy Bitcoin
-Poker's implementation. Banana chips remain free, disposable and unredeemable.
+deck protocol and a redesigned lobby, table view and action dock. The shuffle
+protocol is unchanged. Banana chips remain free, disposable and unredeemable.
+See [poker-interface.md](poker-interface.md) for the interface review.
 
 ## Deployment boundary
 
@@ -60,13 +61,13 @@ same sequence and signature. The existing relay deduplicates the request. A new
 move cannot replace an uncertain one. Storage errors stop play rather than
 publishing a key or move that cannot be recovered.
 
-On reload, choose **Connect to live tables** with the same account, origin,
+On reload, choose **Join live tables** with the same account, origin,
 browser profile and device. The worker imports the saved key, independently
 replays the public record, checks the hand key against its published key, and
 resumes the saved table. It never releases arbitrary card shares requested by
 the relay. Verified completion/cancellation removes the private hand key from
 the next checkpoint. Public receipts remain exportable without private keys.
-**Stand between hands**, then **Forget recovery on this device** deletes that
+**Leave seat** between hands, then **Forget recovery on this device** deletes that
 account's local checkpoint. Clearing the site's browser storage also removes it.
 Signing out stops the live worker; it does not delete recovery needed to sign
 back in before a hand expires. Account deletion on the server does not remotely
@@ -95,6 +96,8 @@ voice selection does not split the visual scene. The room persists the channel
 through hibernation, restores it after a socket reconnect, rechecks it on track
 pulls, and clears it on departure. These are public conversations that spectators
 can join; they are not confidential channels or an anti-collusion mechanism.
+Walking preserves the seat and its normal turns. The lobby offers a return
+control; leaving the seat is a separate action under Table options.
 
 The existing room/presence limit is **32 players**, shared with the island. Ten
 nine-seat table definitions do not establish capacity for 90 simultaneous people
@@ -107,7 +110,9 @@ Per `AGENTS.md`, the default validation mode is **wait**: build and JavaScript
 syntax checks only. No Node runtime tests, browser tests or visual probes were
 run for this change. Regression coverage was added for the gateway, account/key
 binding, simultaneous cross-table joins, key import, table voice/hibernation and
-actual worker recovery after a lost accepted-command response. The worker
+actual worker recovery after a lost accepted-command response. The interface
+revision also adds a regression for action acknowledgments, reconnect blocking
+and transient progress messages. The worker
 recovery fixture uses a storage adapter; it does not validate browser IndexedDB
 or Web Locks. Maintainers can request/run:
 

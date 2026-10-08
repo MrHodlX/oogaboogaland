@@ -10,6 +10,7 @@
   let leaving = false, timer = 0, selected = 0, pendingStand = false, seatTable = -1, shownCountdown = -1;
   const targets = [], snapshots = new Array(10);
   let HERO = "local-player", connecting = false, unsubscribeAccount = null, remotes = null;
+  let visit = 0, pendingLive = null;
   const NO_ACTORS = [];
   // On the Worker's page the island's driving rules hold in here too, and the Ooga driven is reported to the room
   // every frame, so signed-in players on the floor hear each other (voice needs a driven Ooga).
@@ -38,7 +39,7 @@
   const setView = focused => {
     panel.setFocused(focused); pilot.controls.reset();
     BL.net.setPokerVoice(focused ? selected : null);
-    pilot.setActive(!focused && (seatTable < 0 || pendingStand));
+    pilot.setActive(!focused);
   };
   const placeInAisle = () => {
     if (!avatar) return;
@@ -83,7 +84,7 @@
     if (s.dealer >= 0) { const p = PM.SEATS[s.dealer]; view.button.position.x = p.x * 0.72; view.button.position.z = p.z * 0.65; view.button.position.y = 1.4; }
   };
   const updatePanel = () => {
-    panel.setLive(session.live ? session.live.fairness || { phase: "connecting" } : null);
+    panel.setLive(session.live ? { ...(session.live.fairness || { phase: "connecting" }), connection: session.live.connection, busy: session.live.busy } : null);
     panel.update(selected, snapshots, seatTable >= 0 && (!pendingStand || session.live) ? HERO : null, session.live ? false : pendingStand, session.paused, session.autoDeal[selected]);
     shownCountdown = -1;
   };
@@ -96,13 +97,17 @@
     if (seatTable >= 0 && i !== seatTable) { panel.notice("Stand from your current table before switching tables."); return; }
     if (session.live && i !== selected) { try { session.live.action("watch", i); } catch (e) { panel.notice(e.message); return; } }
     selected = i;
-    if (session.live && seatTable >= 0 && pendingStand) { pendingStand = false; sit(session.tables[i].snapshot().seats.findIndex(s => s?.id === HERO)); }
+    if (seatTable >= 0 && !pendingStand) sit(session.tables[i].snapshot().seats.findIndex(s => s?.id === HERO));
     updatePanel(); setView(true);
   };
-  const connectLive = async () => {
-    if (connecting || session.live) return;
-    if (seatTable >= 0) throw new Error("Stand from your practice table before connecting");
+  const connectLive = async (retry = false) => {
+    if (connecting || session.live && !retry) return;
+    if (!session.live && seatTable >= 0) throw new Error("Leave your practice seat before connecting");
+    if (retry && session.live?.connection !== "failed") return;
+    if (retry) session.live.dispose();
+    const visitId = visit;
     connecting = true;
+    panel.setConnecting(true); updatePanel();
     let restoring = true;
     const live = BL.pokerLive.create(() => {
       if (!panel || session?.live !== live) return;
@@ -114,14 +119,16 @@
       if (previous >= 0 && seatTable < 0) { pendingStand = false; placeInAisle(); }
       refresh(true);
     }, message => { if (panel && session?.live === live) panel.notice(message); });
+    pendingLive = live;
     try {
       await live.connect(selected);
-      if (!panel || leaving) { live.dispose(); return; }
+      if (visitId !== visit || !panel || leaving) { live.dispose(); return; }
+      if (seatTable >= 0) placeInAisle();
       session = { tables: live.tables, live, selected, paused: false, pendingStand: false, autoDeal: new Array(10).fill(false), theme: theme.id };
       HERO = live.identity || "connecting"; seatTable = -1; pendingStand = false; snapshots.fill(null); refresh(true);
       if (scene.debug) scene.debug.poker.session = session;
-    } catch (error) { live.dispose(); throw error; }
-    finally { connecting = false; }
+    } catch (error) { live.dispose(); if (visitId === visit) throw error; }
+    finally { if (visitId === visit) { pendingLive = null; connecting = false; if (panel) { panel.setConnecting(false); updatePanel(); } } }
   };
   const addBots = (table, count) => {
     const s = table.snapshot(); let added = 0;
@@ -133,6 +140,9 @@
       // A cosmetic switch must not reset turn timing, raise input or hand state.
       if (name === "theme") { setTheme(value); Themes.save(theme.id); return; }
       if (name === "connect") { connectLive().catch(error => panel?.notice(error.message)); return; }
+      if (name === "reconnect") { connectLive(true).catch(error => panel?.notice(error.message)); return; }
+      if (name === "return") { select(seatTable >= 0 ? seatTable : selected); return; }
+      if (name === "walk") { if (seatTable >= 0) placeInAisle(); setView(false); return; }
       if (session.live) {
         if (name === "practice") {
           if (seatTable >= 0) throw new Error("Stand before returning to practice");
@@ -140,7 +150,6 @@
           seatTable = session.tables.findIndex(t => t.snapshot().seats.some(s => s?.id === HERO));
           snapshots.fill(null); refresh(true); setView(false); if (scene.debug) scene.debug.poker.session = session; return;
         }
-        if (name === "walk") { if (seatTable >= 0) pendingStand = true; placeInAisle(); setView(false); return; }
         if (name === "exit") { leaveFloor(); return; }
         if (name === "verify" || name === "export" || name === "verify-file") { session.live.action(name === "verify-file" ? "verify" : name, name === "verify-file" ? value : null); return; }
         const nickname = document.querySelector('[data-poker="nickname"]').value.trim() || "Ooga";
@@ -156,7 +165,7 @@
           const available = t => !t.playing && t.snapshot().seats.some(s => !s);
           if (!available(table)) selected = session.tables.findIndex(available);
           if (selected < 0) { selected = 0; throw new Error("Every table is playing. Watch a table and join between hands."); }
-          table = activeTable(); const index = table.join(HERO, "You"); seatTable = selected; sit(index);
+          table = activeTable(); table.join(HERO, "You"); seatTable = selected;
         }
         session.paused = false;
         if (!table.playing) {
@@ -165,7 +174,7 @@
           for (const p of table.snapshot().seats) if (p?.bot && p.stack === 0) table.refill(p.id);
           table.refill(HERO); table.start();
         }
-        setView(true);
+        sit(table.snapshot().seats.findIndex(p => p?.id === HERO)); setView(true);
       } else if (name === "join" || name === "seat") {
         if (seatTable >= 0) throw new Error("You already have a seat");
         const index = table.join(HERO, "You", false, name === "seat" ? value : -1);
@@ -173,7 +182,7 @@
       } else if (name === "bots") addBots(table, 3);
       else if (name === "start") table.start();
       else if (name === "refill") table.refill(HERO);
-      else if (name === "stand" || name === "walk") {
+      else if (name === "stand") {
         if (seatTable >= 0 && !pendingStand) {
           if (table.playing) pendingStand = true;
           else { table.leave(HERO); seatTable = -1; }
@@ -189,6 +198,7 @@
     } catch (error) { panel.notice(error.message); }
   };
   const enter = ctx => {
+    visit++;
     world = ctx.world; go = ctx.go; leaving = false; timer = 0; HERO = "local-player"; connecting = false;
     if (ctx.from === "bifrost") document.querySelector('[data-intro="poker"]').hidden = true;
     session = world.poker || (world.poker = { tables: Array.from({ length: 10 }, () => R.create()), selected: 0, pendingStand: false });
@@ -251,7 +261,7 @@
   };
   const update = (dt, elapsed) => {
     pilot.readInput(dt);
-    if (!panel.focused && (seatTable < 0 || pendingStand)) people.update(dt, elapsed);
+    if (!panel.focused) people.update(dt, elapsed);
     pilot.update(dt);
     // The Ooga driven here goes to the room with where it stands and its health; other players here are shown.
     const drivenHere = people.player;
@@ -305,13 +315,14 @@
       }
       if (changed) updatePanel();
     }
-    const seconds = Math.ceil(nextHand[selected]);
-    if (!session.live && shownCountdown !== seconds) { shownCountdown = seconds; panel.countdown(seconds, session.autoDeal[selected]); }
+    const seconds = session.live ? session.live.deadline === null ? -1 : Math.max(0, Math.ceil((session.live.deadline - BL.net.serverNow()) / 1000)) : Math.ceil(nextHand[selected]);
+    if (shownCountdown !== seconds) { shownCountdown = seconds; panel.countdown(seconds, session.autoDeal[selected]); }
     S.stepTweens(dt); fx.update(dt, elapsed);
   };
   const extra = (c, project) => remotes.drawNames(c, project);
   const onKey = e => { if (e.key === "Escape") { if (panel.focused) action("walk"); else if (seatTable >= 0 && !pendingStand) action("stand"); else leaveFloor(); return true; } if (e.key === "0") { pilot.goPreset("entrance"); return true; } return false; };
   const leave = () => {
+    visit++; pendingLive?.dispose(); pendingLive = null;
     session.selected = selected; session.pendingStand = pendingStand;
     if (session.live) session.live.dispose();
     BL.net.setPokerVoice(null);

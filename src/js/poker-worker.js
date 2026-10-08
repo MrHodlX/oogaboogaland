@@ -6,6 +6,8 @@
   let identity, handKey, keyHand = "", token = "", table = 0, mirror = null, record = null, lastRecord = null;
   let running = false, fatal = false, controller = null, revision = -1, seq = 0, latest = null;
   let connecting = false, storage = null, instance = "", account = null, display = null, pending = null;
+  let activeAction = 0, acknowledged = 0;
+  const finishAction = () => { if (!pending && activeAction) { acknowledged = activeAction; activeAction = 0; } };
   const actions = [];
   const post = (type, value) => self.postMessage({ type, ...value });
   const stop = message => { fatal = true; running = false; controller?.abort(); storage?.close(); storage = null; handKey?.dispose(); identity?.dispose(); post("fatal", { message }); };
@@ -47,7 +49,7 @@
     pending = JSON.stringify({ ...value, signature: await identity.sign("command", value) });
     await persist(); await transmit();
   };
-  const progress = (label, done, total) => { if (done === total || done % 12 === 0) post("notice", { message: `${label} · ${Math.round(done / total * 100)}%` }); };
+  const progress = (label, done, total) => { if (done === total || done % 12 === 0) post("progress", { message: `${label} · ${Math.round(done / total * 100)}%` }); };
   const append = async audit => {
     if (audit.protocol !== C.DOMAIN || audit.table !== table) throw new Error("Unexpected hand protocol or table");
     if (!record || audit.offset === 0) {
@@ -58,7 +60,7 @@
     }
     if (audit.offset !== record.events.length) throw new Error("Missing hand record events");
     for (const event of audit.events) {
-      if (event.request.op === "shuffle") post("notice", { message: "Checking a player's shuffle…" });
+      if (event.request.op === "shuffle") post("progress", { message: "Checking a player's shuffle…" });
       if (event.request.op === "cancel") await mirror.cancel(event.request.reason, event.request.offender);
       else await mirror.submit(event.request);
       if (mirror.state().root !== event.root) throw new Error("Hand record verification failed");
@@ -101,7 +103,7 @@
     }
     if (!mirror?.active) { handKey?.dispose(); handKey = null; keyHand = ""; }
     await persist();
-    post("state", { packet: { tables: packet.tables, table, identity: identity.publicKey, deadline: packet.deadline,
+    post("state", { packet: { tables: packet.tables, table, identity: identity.publicKey, deadline: packet.deadline, acknowledged,
       fairness: { phase: s?.phase || "idle", checked: s?.shuffleAt || 0, total: s?.context?.members.length || 0, root: s?.root || "", exportable: !!record || !!lastRecord, complete: s?.phase === "complete", recoverable: !!storage } } });
     if (canceled) post("notice", { message: "Hand canceled. Committed chips were refunded and missing players' seats released." });
   };
@@ -117,7 +119,7 @@
     if (!handKey || keyHand !== hand) throw new Error("The private hand key is unavailable; this hand must be canceled");
     if (s.keys.find(([who]) => who === id)?.[1] !== handKey.publicKey) throw new Error("Recovered key does not match this hand");
     if (s.phase === "shuffle" && s.context.members[s.shuffleAt].id === id) {
-      post("notice", { message: "Shuffling encrypted cards…" });
+      post("progress", { message: "Shuffling encrypted cards…" });
       const shuffle = await C.shuffle(s.deck, s.aggregate, await mirror.shuffleContext(id), (n, total) => progress("Shuffling", n, total));
       await command("shuffle", { shuffle }); return true;
     }
@@ -165,6 +167,7 @@
         if (pending) {
           try { await transmit(); }
           catch (error) { if (!error.rejected) throw error; post("notice", { message: error.message }); }
+          finally { finishAction(); }
         }
         const from = record?.events.length || 0, hand = mirror?.state().context?.nonce || "";
         controller = new AbortController();
@@ -172,8 +175,10 @@
         controller = null;
         try { await acceptPacket(packet); } catch (error) { stop("Verification stopped: " + error.message); break; }
         if (actions.length) {
-          try { await act(actions.shift()); }
+          const request = actions.shift(); activeAction = request.requestId || 0;
+          try { await act(request); }
           catch (error) { if (error.fatal || pending) throw error; post("notice", { message: error.message }); }
+          finally { finishAction(); }
           revision = -1; continue; // Refresh the verified state before generating a protocol contribution.
         }
         try { if (await automatic()) revision = -1; }
@@ -182,7 +187,8 @@
         controller = null;
         if (error.fatal) { stop(error.message); break; }
         if (error.name === "AbortError") continue;
-        post("notice", { message: "Connection interrupted. Reconnecting; secret keys stay on this device." });
+        post("connection", { status: "reconnecting" });
+        post("progress", { message: "Connection interrupted. Reconnecting; secret keys stay on this device." });
         await new Promise(resolve => setTimeout(resolve, 1500)); revision = -1;
       }
     }

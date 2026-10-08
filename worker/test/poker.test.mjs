@@ -3,6 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { Worker } from "node:worker_threads";
+import { runInNewContext } from "node:vm";
 import { createPokerGateway } from "../src/poker.js";
 import { createPokerServer } from "../../server/poker/server.mjs";
 import { loadProtocol, source } from "../../server/poker/load.mjs";
@@ -106,6 +107,53 @@ test("restored crypto keys keep identity and reject zero and noncanonical secret
     for (const bad of ["0".repeat(64), "f".repeat(64), "1", "A".repeat(64), {}]) assert.throws(() => C.player(bad));
   } finally { original.dispose(); restored.dispose(); }
   assert.throws(() => restored.checkpoint());
+});
+
+// Regression: an older in-flight state packet must not unlock the buttons for a second bet.
+test("live UI waits for its own action acknowledgment and blocks bets during reconnection", async () => {
+  let transport;
+  class FakeWorker {
+    constructor() { transport = this; this.sent = []; }
+    postMessage(value) { this.sent.push(value); }
+    terminate() { this.closed = true; }
+    deliver(data) { this.onmessage({ data }); }
+  }
+  const window = { BL: { pokerRules: loadProtocol().pokerRules } };
+  runInNewContext(readFileSync(new URL("../../src/js/poker-live.js", import.meta.url), "utf8"), {
+    window, Worker: FakeWorker, AbortController, location: { protocol: "https:" },
+    fetch: async () => ({ ok: true, json: async () => ({ experimental: true, account: "101" }) }),
+  });
+  const notices = [];
+  const live = window.BL.pokerLive.create(() => {}, message => notices.push(message));
+  try {
+    await live.connect(0);
+    transport.deliver({ type: "connected", identity: "fixture", table: 0 });
+    assert.throws(() => live.action("call", null, 7), /reconnect/);
+    const state = acknowledged => transport.deliver({ type: "state", packet: {
+      acknowledged, deadline: 12345, fairness: { phase: "betting" },
+      tables: Array.from({ length: 10 }, () => ({ state: window.BL.pokerRules.create().snapshot(), phase: "betting" })),
+    } });
+    state(0); live.action("call", null, 7);
+    assert.equal(live.busy, true);
+    assert.throws(() => live.action("call", null, 7), /confirmed/);
+    state(0); assert.equal(live.busy, true, "a stale packet must not acknowledge the move");
+    state(1); assert.equal(live.busy, false);
+    assert.equal(live.deadline, 12345);
+    transport.deliver({ type: "connection", status: "reconnecting" });
+    assert.throws(() => live.action("raise", 100, 8), /reconnect/);
+    transport.deliver({ type: "progress", message: "Reconnecting" });
+    state(1); assert.equal(notices.at(-1), "", "verified state clears transient progress");
+    transport.deliver({ type: "notice", message: "Choose a legal amount" });
+    state(1); assert.equal(notices.at(-1), "Choose a legal amount", "state refresh preserves an action error");
+    live.action("raise", 100, 8);
+    assert.equal(transport.sent.filter(m => m.type === "action").length, 2);
+    assert.equal(transport.sent.at(-1).requestId, 2);
+    transport.deliver({ type: "fatal", message: "fixture stop" });
+    assert.equal(live.connection, "failed");
+    assert.equal(live.connected, false);
+    state(2); assert.equal(live.connection, "failed", "late state cannot revive a stopped worker");
+  } finally { live.dispose(); }
+  assert.equal(transport.closed, true);
 });
 
 // Regression: actual worker code must retry identical signed bytes after the relay accepts a key
